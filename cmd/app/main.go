@@ -100,26 +100,104 @@ func main() {
 	})
 
 	// Assessment routes.
-	r.POST("/assessments", func(c *gin.Context) {
-		var assessment model.Assessment
-		if err := c.ShouldBindJSON(&assessment); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-			return
-		}
-		if err := assessmentService.CreateAssessment(&assessment); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, assessment)
-	})
-	r.GET("/assessments", func(c *gin.Context) {
-		assessments, err := assessmentService.GetAssessments()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, assessments)
-	})
+	assessmentRoutes := r.Group("/assessments")
+	{
+		// Start an assessment
+		assessmentRoutes.POST("/start", func(c *gin.Context) {
+			var req struct {
+				UserID      uint             `json:"user_id"`
+				Title       string           `json:"title"`
+				Description string           `json:"description"`
+				Questions   []model.Question `json:"questions"`
+			}
+
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+				return
+			}
+
+			assessment, err := assessmentService.CreateAssessment(req.UserID, req.Title, req.Description, req.Questions)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"session_id": assessment.SessionID,
+				"questions":  assessment.Questions,
+			})
+		})
+
+		// Submit an answer
+		assessmentRoutes.POST("/submit", func(c *gin.Context) {
+			var req struct {
+				SessionID  string `json:"session_id"`
+				QuestionID uint   `json:"question_id"`
+				Answer     string `json:"answer"`
+			}
+
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+				return
+			}
+
+			assessment, err := assessmentService.GetAssessmentBySessionID(req.SessionID)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+				return
+			}
+
+			var question model.Question
+			for _, q := range assessment.Questions {
+				if q.ID == req.QuestionID {
+					question = q
+					break
+				}
+			}
+
+			if question.ID == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
+				return
+			}
+
+			isCorrect := question.CorrectAnswer == req.Answer
+			feedback := "Incorrect"
+			if isCorrect {
+				feedback = "Correct"
+			}
+
+			answer := model.Answer{
+				AssessmentID: assessment.ID,
+				QuestionID:   req.QuestionID,
+				UserID:       assessment.UserID,
+				Answer:       req.Answer,
+				IsCorrect:    isCorrect,
+				Feedback:     feedback,
+			}
+
+			if err := assessmentService.SaveAnswer(&answer); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"is_correct": isCorrect,
+				"feedback":   feedback,
+			})
+		})
+
+		// Get a specific assessment
+		assessmentRoutes.GET("/:session_id", func(c *gin.Context) {
+			sessionID := c.Param("session_id")
+
+			assessment, err := assessmentService.GetAssessmentBySessionID(sessionID)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Assessment not found"})
+				return
+			}
+			c.JSON(http.StatusOK, assessment)
+		})
+	}
 
 	// Story routes.
 	r.GET("/stories", func(c *gin.Context) {
