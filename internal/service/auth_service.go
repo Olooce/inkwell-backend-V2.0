@@ -34,11 +34,7 @@ func hash256encode(password string) string {
 }
 
 func (s *authService) Register(user *model.User) error {
-	fmt.Println("Received Password:", user.Password) // Debugging
-
 	existingUser, err := s.userRepo.GetUserByEmail(user.Email)
-	fmt.Println("Existing User:", existingUser, "Error:", err) // Debugging
-
 	if err == nil && existingUser != nil {
 		return errors.New("email already in use")
 	}
@@ -48,17 +44,15 @@ func (s *authService) Register(user *model.User) error {
 	}
 
 	// First, apply SHA-256 hashing
-	hashedPassword := hash256encode(user.Password) // Store this in DB
+	hashedPassword := hash256encode(user.Password)
 
 	// Store only the SHA-256 hash
 	user.Password = hashedPassword
 
-	fmt.Println("Stored SHA-256 Hash:", user.Password) // Debugging
-
 	// Save user to DB
 	err = s.userRepo.CreateUser(user)
 	if err != nil {
-		return errors.New("failed to store user in database")
+		return errors.New("failed to create user")
 	}
 
 	return nil
@@ -73,10 +67,9 @@ func (s *authService) Login(username, authhash string) (*model.User, error) {
 	}
 
 	// Step 2: Concatenate email with stored SHA-256 hashed password
-	concatenatedString := username + "::" + user.Password // user.Password is already SHA-256 hashed
-	fmt.Println("Concatenated String for Bcrypt Check:", concatenatedString)
+	concatenatedString := username + "::" + user.Password
 
-	// Step 3: Decode Base64 `authhash` (sent by the client)
+	// Step 3: Decode Base64 `authhash` received from frontend
 	bcryptEncryptedBytes, err := base64.StdEncoding.DecodeString(authhash)
 	if err != nil {
 		return nil, errors.New("invalid authhash format")

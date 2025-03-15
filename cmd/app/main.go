@@ -74,13 +74,13 @@ func main() {
 		auth.POST("/login", func(c *gin.Context) {
 			var creds struct {
 				Email    string `json:"email"`
-				Password string `json:"password"`
+				AuthHash string `json:"authhash"`
 			}
 			if err := c.ShouldBindJSON(&creds); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 				return
 			}
-			user, err := authService.Login(creds.Email, creds.Password)
+			user, err := authService.Login(creds.Email, creds.AuthHash)
 			if err != nil {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 				return
