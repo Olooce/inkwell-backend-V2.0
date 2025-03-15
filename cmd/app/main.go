@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
 	"time"
 
 	"github.com/common-nighthawk/go-figure"
@@ -19,6 +20,7 @@ import (
 
 func main() {
 	printStartUpBanner()
+	startOllama()
 
 	// Load XML configuration from file.
 	cfg, err := config.LoadConfig("config.xml")
@@ -208,4 +210,13 @@ func printStartUpBanner() {
 
 	fmt.Println("======================================================")
 	fmt.Printf("INKWELL API (v%s)\n\n", "2.0.0-StoryScape")
+}
+
+func startOllama() {
+	cmd := exec.Command("./internal/llm/ollama/ollama", "serve")
+	err := cmd.Start()
+	if err != nil {
+		log.Fatalf("Failed to start Ollama: %v", err)
+	}
+	log.Println("Ollama started successfully")
 }

@@ -1,11 +1,13 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 
-	"github.com/go-skynet/go-llama.cpp"
 	"github.com/google/uuid"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
@@ -20,32 +22,25 @@ type AssessmentService interface {
 
 type assessmentService struct {
 	assessmentRepo repository.AssessmentRepository
-	llmModel       *llama.LLama
+	ollamaURL      string
 }
 
-func NewAssessmentService(assessmentRepo repository.AssessmentRepository, modelPath string) AssessmentService {
-	// Load LLaMA model
-	llm, err := llama.New(modelPath, llama.SetContext(512))
-	if err != nil {
-		log.Fatalf("Failed to load LLaMA model: %v", err)
-	}
-
+func NewAssessmentService(assessmentRepo repository.AssessmentRepository) AssessmentService {
 	return &assessmentService{
 		assessmentRepo: assessmentRepo,
-		llmModel:       llm,
+		ollamaURL:      "http://localhost:11434/api/generate", // Local Ollama instance
 	}
 }
 
-// GenerateQuestions - Uses LLaMA to generate assessment questions
+// GenerateQuestions - Uses Ollama to generate assessment questions
 func (s *assessmentService) GenerateQuestions(topic string) ([]model.Question, error) {
 	prompt := fmt.Sprintf("Generate 5 multiple-choice questions on %s.", topic)
 
-	response, err := s.llmModel.Predict(prompt, llama.Debug)
+	response, err := s.callOllama(prompt)
 	if err != nil {
 		return nil, fmt.Errorf("error generating questions: %w", err)
 	}
 
-	// Parse response into question list
 	questions := parseQuestions(response)
 
 	return questions, nil
@@ -55,7 +50,7 @@ func (s *assessmentService) GenerateQuestions(topic string) ([]model.Question, e
 func (s *assessmentService) CreateAssessment() (*model.Assessment, error) {
 	sessionID := uuid.New().String()
 
-	// Generate questions using LLaMA
+	// Generate questions using Ollama
 	questions, err := s.GenerateQuestions("General Knowledge")
 	if err != nil {
 		return nil, err
@@ -65,7 +60,7 @@ func (s *assessmentService) CreateAssessment() (*model.Assessment, error) {
 		UserID:      0, // Default
 		SessionID:   sessionID,
 		Title:       "AI-Generated Assessment",
-		Description: "This assessment was generated using LLaMA.",
+		Description: "This assessment was generated using Ollama.",
 		Status:      "ongoing",
 		Questions:   questions,
 	}
@@ -93,10 +88,40 @@ func (s *assessmentService) SaveAnswer(answer *model.Answer) error {
 	return s.assessmentRepo.SaveAnswer(answer)
 }
 
+// callOllama - Calls the Ollama API
+func (s *assessmentService) callOllama(prompt string) (string, error) {
+	requestBody, _ := json.Marshal(map[string]interface{}{
+		"model":  "mistral", // Change to "llama2" or any available model
+		"prompt": prompt,
+	})
+
+	req, err := http.NewRequest("POST", s.ollamaURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if responseText, ok := result["response"].(string); ok {
+		return responseText, nil
+	}
+
+	return "", fmt.Errorf("invalid response from Ollama")
+}
+
 // parseQuestions - Parses AI-generated text into structured questions
 func parseQuestions(response string) []model.Question {
 	var questions []model.Question
-	// Simple parsing logic
 	lines := strings.Split(response, "\n")
 	for _, line := range lines {
 		if line != "" {
