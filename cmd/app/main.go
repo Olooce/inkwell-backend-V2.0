@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/common-nighthawk/go-figure"
@@ -17,6 +20,8 @@ import (
 	"inkwell-backend-V2.0/internal/repository"
 	"inkwell-backend-V2.0/internal/service"
 )
+
+var ollamaCmd *exec.Cmd // Store the Ollama process
 
 func main() {
 	printStartUpBanner()
@@ -202,6 +207,17 @@ func main() {
 	// Start server on the host and port specified in the XML config.
 	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
 	r.Run(addr)
+
+	// Capture OS signals to handle app shutdown
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+
+	// Wait for termination signal
+	<-signalChan
+
+	// Stop Ollama before exiting
+	stopOllama()
+	log.Println("Application shutting down...")
 }
 
 func printStartUpBanner() {
@@ -212,11 +228,29 @@ func printStartUpBanner() {
 	fmt.Printf("INKWELL API (v%s)\n\n", "2.0.0-StoryScape")
 }
 
+// Start Ollama when the app starts
 func startOllama() {
-	cmd := exec.Command("./internal/llm/ollama/ollama", "serve")
-	err := cmd.Start()
+	ollamaCmd = exec.Command("./internal/llm/ollama/ollama", "serve")
+
+	// Redirect Ollama logs to the terminal
+	ollamaCmd.Stdout = os.Stdout
+	ollamaCmd.Stderr = os.Stderr
+
+	// Start Ollama
+	err := ollamaCmd.Start()
 	if err != nil {
 		log.Fatalf("Failed to start Ollama: %v", err)
 	}
 	log.Println("Ollama started successfully")
+}
+
+// Stop Ollama when the app exits
+func stopOllama() {
+	if ollamaCmd != nil {
+		log.Println("Stopping Ollama...")
+		err := ollamaCmd.Process.Signal(syscall.SIGTERM) // Gracefully stop Ollama
+		if err != nil {
+			log.Printf("Failed to stop Ollama: %v", err)
+		}
+	}
 }
