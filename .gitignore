@@ -10,3 +10,4 @@ coverage/
 db.properties
 Thumbs.db
 cmake-build-debug
+config.xml
