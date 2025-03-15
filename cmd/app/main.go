@@ -137,7 +137,6 @@ func main() {
 }
 
 func printStartUpBanner() {
-	// Create an ASCII art figure for "INKWELL"
 	myFigure := figure.NewFigure("INKWELL", "", true)
 	myFigure.Print()
 
