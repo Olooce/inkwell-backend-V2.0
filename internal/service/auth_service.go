@@ -64,32 +64,33 @@ func (s *authService) Register(user *model.User) error {
 	return nil
 }
 
-// Login verifies authhash
+// Login function to authenticate user
 func (s *authService) Login(username, authhash string) (*model.User, error) {
+	// Step 1: Retrieve user from database (already stored as SHA-256 hash)
 	user, err := s.userRepo.GetUserByEmail(username)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
 
-	// Step 1: Concatenate email with stored password hash
-	concatenatedString := username + "::" + user.Password
+	// Step 2: Concatenate email with stored SHA-256 hashed password
+	concatenatedString := username + "::" + user.Password // user.Password is already SHA-256 hashed
 	fmt.Println("Concatenated String for Bcrypt Check:", concatenatedString)
 
-	// Step 2: Decode Base64 authhash
+	// Step 3: Decode Base64 `authhash` (sent by the client)
 	bcryptEncryptedBytes, err := base64.StdEncoding.DecodeString(authhash)
 	if err != nil {
 		return nil, errors.New("invalid authhash format")
 	}
 	bcryptEncrypted := string(bcryptEncryptedBytes) // Convert bytes to string
 
-	// Step 3: Compare bcrypt hash with concatenated string
+	// Step 4: Compare bcrypt hash with concatenated string
 	err = bcrypt.CompareHashAndPassword([]byte(bcryptEncrypted), []byte(concatenatedString))
 	if err != nil {
 		fmt.Println("Bcrypt Comparison Failed:", err)
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Remove password before returning user data
+	// Step 5: Remove password before returning user data
 	user.Password = ""
 
 	return user, nil
