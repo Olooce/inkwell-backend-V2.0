@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"inkwell-backend-V2.0/utilities"
+
 	"golang.org/x/crypto/bcrypt"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
@@ -14,7 +16,8 @@ import (
 // AuthService interface
 type AuthService interface {
 	Register(user *model.User) error
-	Login(username, authhash string) (*model.User, error)
+	Login(username, authhash string) (*LoginResponse, error)
+	RefreshTokens(refreshToken string) (*TokenResponse, error)
 }
 
 type authService struct {
@@ -58,8 +61,15 @@ func (s *authService) Register(user *model.User) error {
 	return nil
 }
 
+// LoginResponse struct
+type LoginResponse struct {
+	User    *model.User `json:"user"`
+	Access  string      `json:"access"`
+	Refresh string      `json:"refresh"`
+}
+
 // Login function to authenticate user
-func (s *authService) Login(username, authhash string) (*model.User, error) {
+func (s *authService) Login(username, authhash string) (*LoginResponse, error) {
 	// Step 1: Retrieve user from database (already stored as SHA-256 hash)
 	user, err := s.userRepo.GetUserByEmail(username)
 	if err != nil {
@@ -74,7 +84,7 @@ func (s *authService) Login(username, authhash string) (*model.User, error) {
 	if err != nil {
 		return nil, errors.New("invalid authhash format")
 	}
-	bcryptEncrypted := string(bcryptEncryptedBytes) // Convert bytes to string
+	bcryptEncrypted := string(bcryptEncryptedBytes)
 
 	// Step 4: Compare bcrypt hash with concatenated string
 	err = bcrypt.CompareHashAndPassword([]byte(bcryptEncrypted), []byte(concatenatedString))
@@ -86,5 +96,35 @@ func (s *authService) Login(username, authhash string) (*model.User, error) {
 	// Step 5: Remove password before returning user data
 	user.Password = ""
 
-	return user, nil
+	// Step 6: Generate access and refresh tokens
+	accessToken, refreshToken, err := utilities.GenerateTokens(user)
+	if err != nil {
+		return nil, errors.New("failed to generate tokens")
+	}
+
+	// Step 7: Return response in expected format
+	return &LoginResponse{
+		User:    user,
+		Access:  accessToken,
+		Refresh: refreshToken,
+	}, nil
+}
+
+// TokenResponse struct for refresh tokens
+type TokenResponse struct {
+	Access  string `json:"access"`
+	Refresh string `json:"refresh"`
+}
+
+// RefreshTokens function to refresh both access and refresh tokens
+func (s *authService) RefreshTokens(refreshToken string) (*TokenResponse, error) {
+	newAccessToken, newRefreshToken, err := utilities.RefreshTokens(refreshToken)
+	if err != nil {
+		return nil, errors.New("invalid or expired refresh token")
+	}
+
+	return &TokenResponse{
+		Access:  newAccessToken,
+		Refresh: newRefreshToken,
+	}, nil
 }
