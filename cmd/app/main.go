@@ -104,19 +104,7 @@ func main() {
 	{
 		// Start an assessment
 		assessmentRoutes.POST("/start", func(c *gin.Context) {
-			var req struct {
-				UserID      uint             `json:"user_id"`
-				Title       string           `json:"title"`
-				Description string           `json:"description"`
-				Questions   []model.Question `json:"questions"`
-			}
-
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-				return
-			}
-
-			assessment, err := assessmentService.CreateAssessment(req.UserID, req.Title, req.Description, req.Questions)
+			assessment, err := assessmentService.CreateAssessment()
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return

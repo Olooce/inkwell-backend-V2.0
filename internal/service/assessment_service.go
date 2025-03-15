@@ -8,7 +8,7 @@ import (
 )
 
 type AssessmentService interface {
-	CreateAssessment(userID uint, title string, description string, questions []model.Question) (*model.Assessment, error)
+	CreateAssessment() (*model.Assessment, error)
 	GetAssessments() ([]model.Assessment, error)
 	GetAssessmentBySessionID(sessionID string) (*model.Assessment, error)
 	SaveAnswer(answer *model.Answer) error
@@ -22,16 +22,17 @@ func NewAssessmentService(assessmentRepo repository.AssessmentRepository) Assess
 	return &assessmentService{assessmentRepo: assessmentRepo}
 }
 
-func (s *assessmentService) CreateAssessment(userID uint, title string, description string, questions []model.Question) (*model.Assessment, error) {
+// CreateAssessment - Starts a new assessment without requiring request input
+func (s *assessmentService) CreateAssessment() (*model.Assessment, error) {
 	sessionID := uuid.New().String()
 
 	assessment := model.Assessment{
-		UserID:      userID,
+		UserID:      0, // Default or anonymous user ID
 		SessionID:   sessionID,
-		Title:       title,
-		Description: description,
+		Title:       "New Assessment",
+		Description: "Auto-generated assessment",
 		Status:      "ongoing",
-		Questions:   questions,
+		Questions:   []model.Question{}, // No predefined questions
 	}
 
 	err := s.assessmentRepo.CreateAssessment(&assessment)
@@ -42,14 +43,17 @@ func (s *assessmentService) CreateAssessment(userID uint, title string, descript
 	return &assessment, nil
 }
 
+// GetAssessments - Fetch all assessments
 func (s *assessmentService) GetAssessments() ([]model.Assessment, error) {
 	return s.assessmentRepo.GetAssessments()
 }
 
+// GetAssessmentBySessionID - Fetch a specific assessment by session ID
 func (s *assessmentService) GetAssessmentBySessionID(sessionID string) (*model.Assessment, error) {
 	return s.assessmentRepo.GetAssessmentBySessionID(sessionID)
 }
 
+// SaveAnswer - Stores an answer for a given assessment question
 func (s *assessmentService) SaveAnswer(answer *model.Answer) error {
 	return s.assessmentRepo.SaveAnswer(answer)
 }
