@@ -10,19 +10,22 @@ type User struct {
 	FirstName                  string    `json:"first_name"`
 	LastName                   string    `json:"last_name"`
 	InitialAssessmentCompleted bool      `json:"initial_assessment_completed" gorm:"-"`
-	Role                       string    `json:"role"`
 	CreatedAt                  time.Time `json:"created_at"`
 	UpdatedAt                  time.Time `json:"updated_at"`
 }
 
 type Assessment struct {
-	ID     uint `json:"id" gorm:"primaryKey"`
-	UserID uint `json:"user_id"`
-	Score  int  `json:"score"`
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id"`
+	Score     int       `json:"score"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Story struct {
-	ID      uint   `json:"id" gorm:"primaryKey"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
