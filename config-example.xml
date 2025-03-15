@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<API REQUEST_DUMP="true">
+    <CONTEXT>
+        <PORT>8105</PORT>
+        <HOST>0.0.0.0</HOST>
+        <PATH>/</PATH>
+        <TIME_ZONE>Africa/Nairobi</TIME_ZONE>
+        <ENABLE_BASIC_AUTH>true</ENABLE_BASIC_AUTH>
+    </CONTEXT>
+    <AUTHENTICATION MULTIPLE_SAME_USER_SESSIONS="true">
+    </AUTHENTICATION>
+    <PAGINATION>
+        <PAGE_SIZE>10</PAGE_SIZE>
+    </PAGINATION>
+    <DB>
+        <INITIALIZE>false</INITIALIZE>
+        <SERVER>PostgreSQL</SERVER>
+        <HOST>localhost</HOST>
+        <PORT>5432</PORT>
+        <NAMES INKWELL="test_db"/>
+        <USERNAME>smis</USERNAME>
+        <PASSWORD TYPE="ENCRYPTED">***</PASSWORD>
+    </DB>
+</API>
