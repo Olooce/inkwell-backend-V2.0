@@ -1,57 +1,41 @@
 package service
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	_ "log"
-	"net/http"
-	"strings"
-
 	"github.com/google/uuid"
+	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
+	"strconv"
 )
 
 type AssessmentService interface {
-	CreateAssessment() (*model.Assessment, error)
+	CreateAssessment(topic string) (*model.Assessment, error)
 	GetAssessments() ([]model.Assessment, error)
 	GetAssessmentBySessionID(sessionID string) (*model.Assessment, error)
-	SaveAnswer(answer *model.Answer) error
+	SaveAnswer(answer *model.Answer) (*model.AnswerResponse, error)
 }
 
 type assessmentService struct {
 	assessmentRepo repository.AssessmentRepository
-	ollamaURL      string
+	ollamaClient   *llm.OllamaClient
 }
 
-func NewAssessmentService(assessmentRepo repository.AssessmentRepository) AssessmentService {
+func NewAssessmentService(assessmentRepo repository.AssessmentRepository, ollamaClient *llm.OllamaClient) AssessmentService {
 	return &assessmentService{
 		assessmentRepo: assessmentRepo,
-		ollamaURL:      "http://localhost:11434/api/generate", // Local Ollama instance
+		ollamaClient:   ollamaClient,
 	}
 }
 
-// GenerateQuestions - Uses Ollama to generate assessment questions
-func (s *assessmentService) GenerateQuestions(topic string) ([]model.Question, error) {
-	prompt := fmt.Sprintf("Generate 5 multiple-choice questions on %s.", topic)
-
-	response, err := s.callOllama(prompt)
-	if err != nil {
-		return nil, fmt.Errorf("error generating questions: %w", err)
-	}
-
-	questions := parseQuestions(response)
-
-	return questions, nil
-}
-
-// CreateAssessment - Generates an assessment with AI-generated questions
-func (s *assessmentService) CreateAssessment() (*model.Assessment, error) {
+// CreateAssessment - Generates an assessment using either DB questions or AI-generated questions
+func (s *assessmentService) CreateAssessment(topic string) (*model.Assessment, error) {
 	sessionID := uuid.New().String()
+	var questions []model.Question
+	var err error
 
-	// Generate questions using Ollama
-	questions, err := s.GenerateQuestions("General Knowledge")
+	questions, err = s.assessmentRepo.GetRandomQuestions(topic, 5)
+
 	if err != nil {
 		return nil, err
 	}
@@ -59,8 +43,8 @@ func (s *assessmentService) CreateAssessment() (*model.Assessment, error) {
 	assessment := model.Assessment{
 		UserID:      0, // Default
 		SessionID:   sessionID,
-		Title:       "AI-Generated Assessment",
-		Description: "This assessment was generated using Ollama.",
+		Title:       fmt.Sprintf("%s Assessment", topic),
+		Description: fmt.Sprintf("Assessment on %s", topic),
 		Status:      "ongoing",
 		Questions:   questions,
 	}
@@ -83,53 +67,47 @@ func (s *assessmentService) GetAssessmentBySessionID(sessionID string) (*model.A
 	return s.assessmentRepo.GetAssessmentBySessionID(sessionID)
 }
 
-// SaveAnswer - Stores an answer for a given assessment question
-func (s *assessmentService) SaveAnswer(answer *model.Answer) error {
-	return s.assessmentRepo.SaveAnswer(answer)
-}
-
-// callOllama - Calls the Ollama API
-func (s *assessmentService) callOllama(prompt string) (string, error) {
-	requestBody, _ := json.Marshal(map[string]interface{}{
-		"model":  "mistral", // Change to "llama2" or any available model
-		"prompt": prompt,
-	})
-
-	req, err := http.NewRequest("POST", s.ollamaURL, bytes.NewBuffer(requestBody))
+// / SaveAnswer - Stores an answer and evaluates it using the LLM module
+func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerResponse, error) {
+	// Retrieve the assessment
+	assessment, err := s.assessmentRepo.GetAssessmentBySessionID(strconv.Itoa(int(answer.AssessmentID)))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if responseText, ok := result["response"].(string); ok {
-		return responseText, nil
-	}
-
-	return "", fmt.Errorf("invalid response from Ollama")
-}
-
-// parseQuestions - Parses AI-generated text into structured questions
-func parseQuestions(response string) []model.Question {
-	var questions []model.Question
-	lines := strings.Split(response, "\n")
-	for _, line := range lines {
-		if line != "" {
-			questions = append(questions, model.Question{
-				QuestionType:   "masked", // Set appropriate type
-				MaskedSentence: line,     // Store text in a valid field
-			})
+	// Find the correct question and extract relevant fields
+	var questionText, correctAnswer string
+	for _, q := range assessment.Questions {
+		if q.ID == answer.QuestionID {
+			// Select question text based on type
+			if q.QuestionType == "masked" {
+				questionText = q.MaskedSentence
+			} else if q.QuestionType == "error_correction" {
+				questionText = q.ErrorSentence
+			} else {
+				return nil, fmt.Errorf("unknown question type: %s", q.QuestionType)
+			}
+			correctAnswer = q.CorrectAnswer
+			break
 		}
 	}
-	return questions
+
+	// Use the LLM to evaluate the answer
+	isCorrect, feedback, err := s.ollamaClient.EvaluateAnswer(questionText, answer.Answer, correctAnswer)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save the answer result
+	answer.IsCorrect = isCorrect
+	answer.Feedback = feedback
+	err = s.assessmentRepo.SaveAnswer(answer)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.AnswerResponse{
+		IsCorrect: isCorrect,
+		Feedback:  feedback,
+	}, nil
 }
