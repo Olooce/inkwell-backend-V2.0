@@ -13,6 +13,7 @@ type AssessmentRepository interface {
 	SaveAnswer(answer *model.Answer) error
 	GetRandomQuestions(topic string, limit int) ([]model.Question, error)
 	GetQuestionsByCategory(category string) ([]model.Question, error)
+	GetQuestionByID(questionID uint) (*model.Question, error)
 }
 
 type assessmentRepository struct{}
@@ -57,4 +58,13 @@ func (r *assessmentRepository) GetQuestionsByCategory(category string) ([]model.
 	var questions []model.Question
 	err := db.GetDB().Where("category = ?", category).Find(&questions).Error // Fixed incorrect `r.db.GetDB()`
 	return questions, err
+}
+
+func (r *assessmentRepository) GetQuestionByID(questionID uint) (*model.Question, error) {
+	var question model.Question
+	err := db.GetDB().Where("id = ?", questionID).First(&question).Error
+	if err != nil {
+		return nil, err
+	}
+	return &question, nil
 }

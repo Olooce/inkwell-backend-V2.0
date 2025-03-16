@@ -6,7 +6,6 @@ import (
 	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
-	"strconv"
 )
 
 type AssessmentService interface {
@@ -69,36 +68,24 @@ func (s *assessmentService) GetAssessmentBySessionID(sessionID string) (*model.A
 
 // SaveAnswer - Stores an answer and evaluates it using the LLM module
 func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerResponse, error) {
-	// Retrieve the assessment
-	assessment, err := s.assessmentRepo.GetAssessmentBySessionID(strconv.Itoa(int(answer.AssessmentID)))
+	// Fetch the question directly by ID
+	question, err := s.assessmentRepo.GetQuestionByID(answer.QuestionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("question not found")
 	}
 
-	// Fetch questions based on category
-	questions, err := s.assessmentRepo.GetQuestionsByCategory(assessment.Category)
-	if err != nil {
-		return nil, err
-	}
-
-	// Find the correct question and extract relevant fields
-	var questionText, correctAnswer string
-	for _, q := range questions {
-		if q.ID == answer.QuestionID {
-			if q.QuestionType == "masked" {
-				questionText = q.MaskedSentence
-			} else if q.QuestionType == "error_correction" {
-				questionText = q.ErrorSentence
-			} else {
-				return nil, fmt.Errorf("unknown question type: %s", q.QuestionType)
-			}
-			correctAnswer = q.CorrectAnswer
-			break
-		}
+	// Extract question text based on type
+	var questionText string
+	if question.QuestionType == "masked" {
+		questionText = question.MaskedSentence
+	} else if question.QuestionType == "error_correction" {
+		questionText = question.ErrorSentence
+	} else {
+		return nil, fmt.Errorf("unknown question type: %s", question.QuestionType)
 	}
 
 	// Use the LLM to evaluate the answer
-	isCorrect, feedback, err := s.ollamaClient.EvaluateAnswer(questionText, answer.Answer, correctAnswer)
+	isCorrect, feedback, err := s.ollamaClient.EvaluateAnswer(questionText, answer.Answer, question.CorrectAnswer)
 	if err != nil {
 		return nil, err
 	}
@@ -115,4 +102,5 @@ func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerRespo
 		IsCorrect: isCorrect,
 		Feedback:  feedback,
 	}, nil
+
 }

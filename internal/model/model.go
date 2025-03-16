@@ -42,6 +42,7 @@ type Question struct {
 type Answer struct {
 	ID           uint      `json:"id" gorm:"primaryKey"`
 	AssessmentID uint      `json:"assessment_id"`
+	SessionID    string    `json:"session_id"`
 	QuestionID   uint      `json:"question_id"`
 	UserID       uint      `json:"user_id"`
 	Answer       string    `json:"answer"`
