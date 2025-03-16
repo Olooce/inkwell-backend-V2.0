@@ -38,7 +38,7 @@ func main() {
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
 	// Run migrations.
-	db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Story{})
+	db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{})
 
 	// Create repositories.
 	userRepo := repository.NewUserRepository()
@@ -48,7 +48,7 @@ func main() {
 	// Create services.
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
-	ollamaClient := llm.NewOllamaClient("http://localhost:11434")
+	ollamaClient := llm.NewOllamaClient("http://localhost:11434/api/generate")
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 
 	storyService := service.NewStoryService(storyRepo)
@@ -203,6 +203,7 @@ func main() {
 
 			answerResponse, err := assessmentService.SaveAnswer(&answer)
 			if err != nil {
+				log.Printf("Failed to save answer: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save answer"})
 				return
 			}

@@ -34,7 +34,7 @@ func (r *assessmentRepository) GetAssessments() ([]model.Assessment, error) {
 
 func (r *assessmentRepository) GetAssessmentBySessionID(sessionID string) (*model.Assessment, error) {
 	var assessment model.Assessment
-	err := db.GetDB().Where("session_id = ?", sessionID).First(&assessment).Error
+	err := db.GetDB().Preload("Questions").Where("session_id = ?", sessionID).First(&assessment).Error
 	if err != nil {
 		return nil, errors.New("assessment not found")
 	}
