@@ -36,7 +36,7 @@ func main() {
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
 	// Run migrations.
-	db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Story{})
+	db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Story{})
 
 	// Create repositories.
 	userRepo := repository.NewUserRepository()

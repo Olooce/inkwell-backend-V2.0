@@ -31,13 +31,11 @@ type Assessment struct {
 }
 
 type Question struct {
-	ID            uint      `json:"id" gorm:"primaryKey"`
-	AssessmentID  uint      `json:"assessment_id"`
-	Text          string    `json:"text" gorm:"not null"`
-	Choices       string    `json:"choices"` // JSON array of choices
-	CorrectAnswer string    `json:"correct_answer" gorm:"not null"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID             uint   `gorm:"primaryKey"`
+	QuestionType   string `gorm:"type:varchar(20);not null"` // "masked" or "error_correction"
+	MaskedSentence string `gorm:"type:text"`
+	ErrorSentence  string `gorm:"type:text"`
+	CorrectAnswer  string `gorm:"type:text;not null"`
 }
 
 type Answer struct {

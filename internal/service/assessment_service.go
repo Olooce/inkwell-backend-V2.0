@@ -125,7 +125,10 @@ func parseQuestions(response string) []model.Question {
 	lines := strings.Split(response, "\n")
 	for _, line := range lines {
 		if line != "" {
-			questions = append(questions, model.Question{Text: line})
+			questions = append(questions, model.Question{
+				QuestionType:   "masked", // Set appropriate type
+				MaskedSentence: line,     // Store text in a valid field
+			})
 		}
 	}
 	return questions
