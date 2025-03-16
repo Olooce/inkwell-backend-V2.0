@@ -203,21 +203,25 @@ func main() {
 		}
 		c.JSON(http.StatusOK, stories)
 	})
-
-	// Start server on the host and port specified in the XML config.
-	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
-	r.Run(addr)
-
-	// Capture OS signals to handle app shutdown
+	// **Graceful shutdown handling in a separate goroutine**
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
-	// Wait for termination signal
-	<-signalChan
+	go func() {
+		<-signalChan
+		log.Println("Received termination signal. Shutting down gracefully...")
 
-	// Stop Ollama before exiting
-	stopOllama()
-	log.Println("Application shutting down...")
+		stopOllama() // Stop Ollama
+
+		log.Println("Application shut down successfully.")
+		os.Exit(0)
+	}()
+
+	// Start the server
+	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
+	if err := r.Run(addr); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
 
 func printStartUpBanner() {
@@ -230,7 +234,7 @@ func printStartUpBanner() {
 
 // Start Ollama when the app starts
 func startOllama() {
-	ollamaCmd = exec.Command("./internal/llm/ollama/ollama", "serve")
+	ollamaCmd = exec.Command("ollama", "serve")
 
 	// Redirect Ollama logs to the terminal
 	ollamaCmd.Stdout = os.Stdout
