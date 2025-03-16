@@ -176,6 +176,9 @@ func main() {
 			}
 
 			if !questionBelongsToAssessment {
+				log.Printf("Assessment Questions: %+v", assessment.Questions)
+				log.Printf("Submitted Question ID: %d", req.QuestionID)
+
 				c.JSON(http.StatusForbidden, gin.H{"error": "Question does not belong to this assessment"})
 				return
 			}

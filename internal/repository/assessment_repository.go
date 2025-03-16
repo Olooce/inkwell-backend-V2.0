@@ -28,13 +28,13 @@ func (r *assessmentRepository) CreateAssessment(assessment *model.Assessment) er
 
 func (r *assessmentRepository) GetAssessments() ([]model.Assessment, error) {
 	var assessments []model.Assessment
-	err := db.GetDB().Find(&assessments).Error // Removed Preload("Questions")
+	err := db.GetDB().Find(&assessments).Error
 	return assessments, err
 }
 
 func (r *assessmentRepository) GetAssessmentBySessionID(sessionID string) (*model.Assessment, error) {
 	var assessment model.Assessment
-	err := db.GetDB().Where("session_id = ?", sessionID).First(&assessment).Error // Removed Preload("Questions")
+	err := db.GetDB().Where("session_id = ?", sessionID).First(&assessment).Error
 	if err != nil {
 		return nil, errors.New("assessment not found")
 	}
