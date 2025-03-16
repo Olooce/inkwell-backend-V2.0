@@ -141,43 +141,56 @@ func main() {
 		// Submit an answer
 		assessmentRoutes.POST("/submit", func(c *gin.Context) {
 			var req struct {
-				SessionID  string `json:"session_id"`
-				QuestionID uint   `json:"question_id"`
-				Answer     string `json:"answer"`
+				SessionID  string `json:"session_id" binding:"required"`
+				QuestionID uint   `json:"question_id" binding:"required"`
+				Answer     string `json:"answer" binding:"required"`
 			}
 
+			// Validate JSON input
 			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: missing required fields"})
 				return
 			}
 
+			// Fetch the assessment
 			assessment, err := assessmentService.GetAssessmentBySessionID(req.SessionID)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
 				return
 			}
 
-			var question model.Question
-			for _, q := range assessment.Questions {
-				if q.ID == req.QuestionID {
-					question = q
-					break
-				}
-			}
-
-			if question.ID == 0 {
+			// Fetch the question directly by ID instead of looping through assessment.Questions
+			question, err := assessmentRepo.GetQuestionByID(req.QuestionID)
+			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
 				return
 			}
 
+			// Ensure the question belongs to the current assessment
+			var questionBelongsToAssessment bool
+			for _, q := range assessment.Questions {
+				if q.ID == question.ID {
+					questionBelongsToAssessment = true
+					break
+				}
+			}
+
+			if !questionBelongsToAssessment {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Question does not belong to this assessment"})
+				return
+			}
+
+			// Evaluate the answer
 			isCorrect := question.CorrectAnswer == req.Answer
 			feedback := "Incorrect"
 			if isCorrect {
 				feedback = "Correct"
 			}
 
+			// Save the answer
 			answer := model.Answer{
 				AssessmentID: assessment.ID,
+				SessionID:    req.SessionID,
 				QuestionID:   req.QuestionID,
 				UserID:       assessment.UserID,
 				Answer:       req.Answer,
@@ -187,10 +200,11 @@ func main() {
 
 			answerResponse, err := assessmentService.SaveAnswer(&answer)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save answer"})
 				return
 			}
 
+			// Return a successful response
 			c.JSON(http.StatusOK, answerResponse)
 		})
 
