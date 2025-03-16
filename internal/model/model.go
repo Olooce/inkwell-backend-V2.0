@@ -52,6 +52,10 @@ type Answer struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type AnswerResponse struct {
+	IsCorrect bool   `json:"is_correct"`
+	Feedback  string `json:"feedback"`
+}
 type Story struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	Title     string    `json:"title"`

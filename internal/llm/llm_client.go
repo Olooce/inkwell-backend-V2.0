@@ -1,38 +1,50 @@
 package llm
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"inkwell-backend-V2.0/internal/model"
 	"net/http"
+	"strings"
 )
 
-// LLMClient defines the interface for interacting with LLM services
-type LLMClient interface {
-	GenerateResponse(prompt string) (string, error)
+type OllamaClient struct {
+	ollamaURL string
 }
 
-// ollamaClient implements LLMClient for Ollama
-type ollamaClient struct {
-	url string
+func NewOllamaClient(url string) *OllamaClient {
+	return &OllamaClient{ollamaURL: url}
 }
 
-// NewLLMClient initializes an LLM client
-func NewLLMClient(url string) LLMClient {
-	return &ollamaClient{url: url}
+func (o *OllamaClient) GenerateQuestions(topic string, limit int) ([]string, error) {
+	prompt := fmt.Sprintf("Generate %d multiple-choice questions on %s.", limit, topic)
+	response, err := o.callOllama(prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseQuestions(response), nil
 }
 
-// GenerateResponse - Calls LLM API and streams AI responses
-func (c *ollamaClient) GenerateResponse(prompt string) (string, error) {
+func (o *OllamaClient) EvaluateAnswer(question, userAnswer, correctAnswer string) (bool, string, error) {
+	prompt := fmt.Sprintf("Question: %s\nUser Answer: %s\nCorrect Answer: %s\nIs the answer correct? Explain why.", question, userAnswer, correctAnswer)
+	response, err := o.callOllama(prompt)
+	if err != nil {
+		return false, "", err
+	}
+
+	isCorrect := determineCorrectness(response)
+	return isCorrect, response, nil
+}
+
+func (o *OllamaClient) callOllama(prompt string) (string, error) {
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"model":  "mistral",
 		"prompt": prompt,
-		"stream": true,
 	})
 
-	req, err := http.NewRequest("POST", c.url, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", o.ollamaURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return "", err
 	}
@@ -45,30 +57,29 @@ func (c *ollamaClient) GenerateResponse(prompt string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Read response stream
-	var fullResponse string
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		fullResponse += scanner.Text()
-	}
-
-	if err := scanner.Err(); err != nil {
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
 
-	return fullResponse, nil
+	if responseText, ok := result["response"].(string); ok {
+		return responseText, nil
+	}
+
+	return "", errors.New("invalid response from Ollama")
 }
 
-// ParseQuestions - Converts LLM response to structured questions
-func ParseQuestions(response string) []model.Question {
-	var parsed struct {
-		Questions []model.Question `json:"questions"`
+func parseQuestions(response string) []string {
+	var questions []string
+	lines := strings.Split(response, "\n")
+	for _, line := range lines {
+		if line != "" {
+			questions = append(questions, line)
+		}
 	}
+	return questions
+}
 
-	if err := json.Unmarshal([]byte(response), &parsed); err != nil {
-		fmt.Println("Error parsing JSON:", err)
-		return nil
-	}
-
-	return parsed.Questions
+func determineCorrectness(response string) bool {
+	return !strings.Contains(strings.ToLower(response), "incorrect")
 }

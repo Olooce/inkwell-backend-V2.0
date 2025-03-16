@@ -11,6 +11,7 @@ type AssessmentRepository interface {
 	GetAssessments() ([]model.Assessment, error)
 	GetAssessmentBySessionID(sessionID string) (*model.Assessment, error)
 	SaveAnswer(answer *model.Answer) error
+	GetRandomQuestions(topic string, limit int) ([]model.Question, error)
 }
 
 type assessmentRepository struct{}
@@ -40,4 +41,13 @@ func (r *assessmentRepository) GetAssessmentBySessionID(sessionID string) (*mode
 
 func (r *assessmentRepository) SaveAnswer(answer *model.Answer) error {
 	return db.GetDB().Create(answer).Error
+}
+
+func (r *assessmentRepository) GetRandomQuestions(topic string, limit int) ([]model.Question, error) {
+	var questions []model.Question
+	err := db.GetDB().Raw(`SELECT * FROM questions WHERE topic = ? ORDER BY RANDOM() LIMIT ?`, topic, limit).Scan(&questions).Error
+	if err != nil {
+		return nil, err
+	}
+	return questions, nil
 }
