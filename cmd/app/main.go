@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"inkwell-backend-V2.0/internal/llm"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -114,7 +115,18 @@ func main() {
 	{
 		// Start an assessment
 		assessmentRoutes.POST("/start", func(c *gin.Context) {
-			assessment, err := assessmentService.CreateAssessment()
+			grammarTopics := []string{
+				"Tenses",
+				"Subject-Verb Agreement",
+				"Active and Passive Voice",
+				"Direct and Indirect Speech",
+				"Punctuation Rules",
+			}
+
+			rand.Seed(time.Now().UnixNano()) // Ensure randomness
+			selectedTopic := grammarTopics[rand.Intn(len(grammarTopics))]
+
+			assessment, err := assessmentService.CreateAssessment(selectedTopic)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -122,9 +134,10 @@ func main() {
 
 			c.JSON(http.StatusOK, gin.H{
 				"session_id": assessment.SessionID,
+				"topic":      selectedTopic,
 				"questions":  assessment.Questions,
 			})
-		})
+		}) // **CLOSE THE FUNCTION HERE**
 
 		// Submit an answer
 		assessmentRoutes.POST("/submit", func(c *gin.Context) {
@@ -180,11 +193,6 @@ func main() {
 			}
 
 			c.JSON(http.StatusOK, answerResponse)
-
-			c.JSON(http.StatusOK, gin.H{
-				"is_correct": isCorrect,
-				"feedback":   feedback,
-			})
 		})
 
 		// Get a specific assessment

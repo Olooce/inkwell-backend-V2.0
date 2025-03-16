@@ -45,9 +45,15 @@ func (r *assessmentRepository) SaveAnswer(answer *model.Answer) error {
 
 func (r *assessmentRepository) GetRandomQuestions(topic string, limit int) ([]model.Question, error) {
 	var questions []model.Question
-	err := db.GetDB().Raw(`SELECT * FROM questions WHERE topic = ? ORDER BY RANDOM() LIMIT ?`, topic, limit).Scan(&questions).Error
+	err := db.GetDB().Raw(`SELECT * FROM questions WHERE category = ? ORDER BY RANDOM() LIMIT ?`, topic, limit).Scan(&questions).Error
 	if err != nil {
 		return nil, err
 	}
 	return questions, nil
+}
+
+func (r *assessmentRepository) GetQuestionsByCategory(category string) ([]model.Question, error) {
+	var questions []model.Question
+	err := r.db.GetDB().Where("category = ?", category).Find(&questions).Error
+	return questions, err
 }

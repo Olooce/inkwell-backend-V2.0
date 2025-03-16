@@ -15,27 +15,27 @@ type User struct {
 }
 
 type Assessment struct {
-	ID                   uint       `json:"id" gorm:"primaryKey"`
-	UserID               uint       `json:"user_id" gorm:"not null"`
-	SessionID            string     `json:"session_id" gorm:"not null;unique"`
-	Title                string     `json:"title" gorm:"not null"`
-	Description          string     `json:"description"`
-	Score                int        `json:"score" gorm:"not null"`
-	Category             string     `json:"category"`
-	Status               string     `json:"status" gorm:"default:'pending'"` // pending, completed
-	Questions            []Question `json:"questions" gorm:"foreignKey:AssessmentID"`
-	CurrentQuestionIndex int        `json:"current_question_index" gorm:"default:0"`
-	Answers              []Answer   `json:"answers" gorm:"foreignKey:AssessmentID"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
+	ID                   uint      `json:"id" gorm:"primaryKey"`
+	UserID               uint      `json:"user_id" gorm:"not null"`
+	SessionID            string    `json:"session_id" gorm:"not null;unique"`
+	Title                string    `json:"title" gorm:"not null"`
+	Description          string    `json:"description"`
+	Score                int       `json:"score" gorm:"not null"`
+	Category             string    `json:"category" gorm:"not null"`
+	Status               string    `json:"status" gorm:"default:'pending'"` // pending, completed
+	CurrentQuestionIndex int       `json:"current_question_index" gorm:"default:0"`
+	Answers              []Answer  `json:"answers" gorm:"foreignKey:AssessmentID"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type Question struct {
-	ID             uint   `gorm:"primaryKey"`
-	QuestionType   string `gorm:"type:varchar(20);not null"` // "masked" or "error_correction"
-	MaskedSentence string `gorm:"type:text"`
-	ErrorSentence  string `gorm:"type:text"`
-	CorrectAnswer  string `gorm:"type:text;not null"`
+	ID             uint   `json:"id" gorm:"primaryKey"`
+	Category       string `json:"category" gorm:"not null"`                       // Relates questions to assessments
+	QuestionType   string `json:"question_type" gorm:"type:varchar(20);not null"` // "masked" or "error_correction"
+	MaskedSentence string `json:"masked_sentence" gorm:"type:text"`
+	ErrorSentence  string `json:"error_sentence" gorm:"type:text"`
+	CorrectAnswer  string `json:"correct_answer" gorm:"type:text;not null"`
 }
 
 type Answer struct {
@@ -54,6 +54,7 @@ type AnswerResponse struct {
 	IsCorrect bool   `json:"is_correct"`
 	Feedback  string `json:"feedback"`
 }
+
 type Story struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	Title     string    `json:"title"`

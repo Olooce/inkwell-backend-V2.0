@@ -28,34 +28,34 @@ func NewAssessmentService(assessmentRepo repository.AssessmentRepository, ollama
 	}
 }
 
-// CreateAssessment - Generates an assessment using either DB questions or AI-generated questions
-func (s *assessmentService) CreateAssessment(topic string) (*model.Assessment, error) {
+/func (s *assessmentService) CreateAssessment(topic string) (*model.Assessment, []model.Question, error) {
 	sessionID := uuid.New().String()
-	var questions []model.Question
-	var err error
 
-	questions, err = s.assessmentRepo.GetRandomQuestions(topic, 5)
-
+	// Fetch questions based on category/topic
+	questions, err := s.assessmentRepo.GetRandomQuestions(topic, 5)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	// Create assessment without directly storing questions
 	assessment := model.Assessment{
 		UserID:      0, // Default
 		SessionID:   sessionID,
 		Title:       fmt.Sprintf("%s Assessment", topic),
 		Description: fmt.Sprintf("Assessment on %s", topic),
 		Status:      "ongoing",
-		Questions:   questions,
+		Category:    topic, // Used to fetch related questions
 	}
 
 	err = s.assessmentRepo.CreateAssessment(&assessment)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &assessment, nil
+	// Return both the assessment and the questions
+	return &assessment, questions, nil
 }
+
 
 // GetAssessments - Fetch all assessments
 func (s *assessmentService) GetAssessments() ([]model.Assessment, error) {
