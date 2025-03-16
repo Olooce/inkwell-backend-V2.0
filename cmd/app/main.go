@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"inkwell-backend-V2.0/internal/llm"
 	"log"
 	"net/http"
 	"os"
@@ -46,7 +47,9 @@ func main() {
 	// Create services.
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
-	assessmentService := service.NewAssessmentService(assessmentRepo)
+	ollamaClient := llm.NewOllamaClient("http://localhost:11434")
+	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
+
 	storyService := service.NewStoryService(storyRepo)
 
 	// Initialize Gin router.
@@ -170,10 +173,13 @@ func main() {
 				Feedback:     feedback,
 			}
 
-			if err := assessmentService.SaveAnswer(&answer); err != nil {
+			answerResponse, err := assessmentService.SaveAnswer(&answer)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+
+			c.JSON(http.StatusOK, answerResponse)
 
 			c.JSON(http.StatusOK, gin.H{
 				"is_correct": isCorrect,
