@@ -12,6 +12,7 @@ type AssessmentRepository interface {
 	GetAssessmentBySessionID(sessionID string) (*model.Assessment, error)
 	SaveAnswer(answer *model.Answer) error
 	GetRandomQuestions(topic string, limit int) ([]model.Question, error)
+	GetQuestionsByCategory(category string) ([]model.Question, error)
 }
 
 type assessmentRepository struct{}
@@ -26,13 +27,13 @@ func (r *assessmentRepository) CreateAssessment(assessment *model.Assessment) er
 
 func (r *assessmentRepository) GetAssessments() ([]model.Assessment, error) {
 	var assessments []model.Assessment
-	err := db.GetDB().Preload("Questions").Find(&assessments).Error
+	err := db.GetDB().Find(&assessments).Error // Removed Preload("Questions")
 	return assessments, err
 }
 
 func (r *assessmentRepository) GetAssessmentBySessionID(sessionID string) (*model.Assessment, error) {
 	var assessment model.Assessment
-	err := db.GetDB().Preload("Questions").Where("session_id = ?", sessionID).First(&assessment).Error
+	err := db.GetDB().Where("session_id = ?", sessionID).First(&assessment).Error // Removed Preload("Questions")
 	if err != nil {
 		return nil, errors.New("assessment not found")
 	}
@@ -54,6 +55,6 @@ func (r *assessmentRepository) GetRandomQuestions(topic string, limit int) ([]mo
 
 func (r *assessmentRepository) GetQuestionsByCategory(category string) ([]model.Question, error) {
 	var questions []model.Question
-	err := r.db.GetDB().Where("category = ?", category).Find(&questions).Error
+	err := db.GetDB().Where("category = ?", category).Find(&questions).Error // Fixed incorrect `r.db.GetDB()`
 	return questions, err
 }

@@ -15,18 +15,19 @@ type User struct {
 }
 
 type Assessment struct {
-	ID                   uint      `json:"id" gorm:"primaryKey"`
-	UserID               uint      `json:"user_id" gorm:"not null"`
-	SessionID            string    `json:"session_id" gorm:"not null;unique"`
-	Title                string    `json:"title" gorm:"not null"`
-	Description          string    `json:"description"`
-	Score                int       `json:"score" gorm:"not null"`
-	Category             string    `json:"category" gorm:"not null"`
-	Status               string    `json:"status" gorm:"default:'pending'"` // pending, completed
-	CurrentQuestionIndex int       `json:"current_question_index" gorm:"default:0"`
-	Answers              []Answer  `json:"answers" gorm:"foreignKey:AssessmentID"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   uint       `json:"id" gorm:"primaryKey"`
+	UserID               uint       `json:"user_id" gorm:"not null"`
+	SessionID            string     `json:"session_id" gorm:"not null;unique"`
+	Title                string     `json:"title" gorm:"not null"`
+	Description          string     `json:"description"`
+	Score                int        `json:"score" gorm:"not null"`
+	Category             string     `json:"category" gorm:"not null"`
+	Status               string     `json:"status" gorm:"default:'pending'"` // pending, completed
+	CurrentQuestionIndex int        `json:"current_question_index" gorm:"default:0"`
+	Answers              []Answer   `json:"answers" gorm:"foreignKey:AssessmentID"`
+	Questions            []Question `json:"questions" gorm:"many2many:assessment_questions"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 type Question struct {

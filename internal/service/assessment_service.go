@@ -10,7 +10,7 @@ import (
 )
 
 type AssessmentService interface {
-	CreateAssessment(topic string) (*model.Assessment, error)
+	CreateAssessment(topic string) (*model.Assessment, []model.Question, error)
 	GetAssessments() ([]model.Assessment, error)
 	GetAssessmentBySessionID(sessionID string) (*model.Assessment, error)
 	SaveAnswer(answer *model.Answer) (*model.AnswerResponse, error)
@@ -28,7 +28,8 @@ func NewAssessmentService(assessmentRepo repository.AssessmentRepository, ollama
 	}
 }
 
-/func (s *assessmentService) CreateAssessment(topic string) (*model.Assessment, []model.Question, error) {
+// CreateAssessment - Generates an assessment using either DB questions or AI-generated questions
+func (s *assessmentService) CreateAssessment(topic string) (*model.Assessment, []model.Question, error) {
 	sessionID := uuid.New().String()
 
 	// Fetch questions based on category/topic
@@ -56,7 +57,6 @@ func NewAssessmentService(assessmentRepo repository.AssessmentRepository, ollama
 	return &assessment, questions, nil
 }
 
-
 // GetAssessments - Fetch all assessments
 func (s *assessmentService) GetAssessments() ([]model.Assessment, error) {
 	return s.assessmentRepo.GetAssessments()
@@ -67,7 +67,7 @@ func (s *assessmentService) GetAssessmentBySessionID(sessionID string) (*model.A
 	return s.assessmentRepo.GetAssessmentBySessionID(sessionID)
 }
 
-// / SaveAnswer - Stores an answer and evaluates it using the LLM module
+// SaveAnswer - Stores an answer and evaluates it using the LLM module
 func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerResponse, error) {
 	// Retrieve the assessment
 	assessment, err := s.assessmentRepo.GetAssessmentBySessionID(strconv.Itoa(int(answer.AssessmentID)))
@@ -75,11 +75,16 @@ func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerRespo
 		return nil, err
 	}
 
+	// Fetch questions based on category
+	questions, err := s.assessmentRepo.GetQuestionsByCategory(assessment.Category)
+	if err != nil {
+		return nil, err
+	}
+
 	// Find the correct question and extract relevant fields
 	var questionText, correctAnswer string
-	for _, q := range assessment.Questions {
+	for _, q := range questions {
 		if q.ID == answer.QuestionID {
-			// Select question text based on type
 			if q.QuestionType == "masked" {
 				questionText = q.MaskedSentence
 			} else if q.QuestionType == "error_correction" {
