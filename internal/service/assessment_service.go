@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
@@ -9,7 +10,7 @@ import (
 )
 
 type AssessmentService interface {
-	CreateAssessment(topic string) (*model.Assessment, []model.Question, error)
+	CreateAssessment(c *gin.Context, topic string) (*model.Assessment, []model.Question, error)
 	GetAssessments() ([]model.Assessment, error)
 	GetAssessmentBySessionID(sessionID string) (*model.Assessment, error)
 	SaveAnswer(answer *model.Answer) (*model.AnswerResponse, error)
@@ -27,8 +28,20 @@ func NewAssessmentService(assessmentRepo repository.AssessmentRepository, ollama
 	}
 }
 
-func (s *assessmentService) CreateAssessment(topic string) (*model.Assessment, []model.Question, error) {
+func (s *assessmentService) CreateAssessment(c *gin.Context, topic string) (*model.Assessment, []model.Question, error) {
 	sessionID := uuid.New().String()
+
+	// Retrieve user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		return nil, nil, fmt.Errorf("user ID not found in token")
+	}
+
+	// Convert userID to the expected type (uint)
+	userIDUint, ok := userID.(uint)
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid user ID format")
+	}
 
 	// Fetch questions based on topic
 	questions, err := s.assessmentRepo.GetRandomQuestions(topic, 5)
@@ -38,13 +51,13 @@ func (s *assessmentService) CreateAssessment(topic string) (*model.Assessment, [
 
 	// Create assessment object
 	assessment := model.Assessment{
-		UserID:      0,
+		UserID:      userIDUint, // Assign user ID
 		SessionID:   sessionID,
 		Title:       fmt.Sprintf("%s Assessment", topic),
 		Description: fmt.Sprintf("Assessment on %s", topic),
 		Status:      "ongoing",
 		Category:    topic,
-		Questions:   questions, // Associate questions with the assessment
+		Questions:   questions,
 	}
 
 	// Save assessment and questions relation in DB
