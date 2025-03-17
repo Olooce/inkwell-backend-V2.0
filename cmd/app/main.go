@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"inkwell-backend-V2.0/internal/llm"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -277,21 +279,34 @@ func printStartUpBanner() {
 
 // Start Ollama if not already running
 func startOllama() {
-	if isOllamaRunning() {
-		log.Println("Ollama is already running. Skipping startup.")
-		return
-	}
-
 	ollamaCmd = exec.Command("ollama", "serve")
 
-	// Redirect logs to terminal
-	ollamaCmd.Stdout = os.Stdout
-	ollamaCmd.Stderr = os.Stderr
+	// Create a standard output pipe to filter logs
+	stdoutPipe, _ := ollamaCmd.StdoutPipe()
+	stderrPipe, _ := ollamaCmd.StderrPipe()
 
+	// Start Ollama
 	err := ollamaCmd.Start()
 	if err != nil {
 		log.Fatalf("Failed to start Ollama: %v", err)
 	}
+
+	// Process standard output logs
+	go func() {
+		scanner := bufio.NewScanner(stdoutPipe)
+		for scanner.Scan() {
+			log.Println(scanner.Text()) // Normal logs
+		}
+	}()
+
+	// Process error output logs separately
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			log.Println("[OLLAMA WARNING]", scanner.Text()) // Prefix error logs
+		}
+	}()
+
 	log.Println("Ollama started successfully")
 }
 
@@ -301,7 +316,12 @@ func isOllamaRunning() bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Failed to close body: %v", err)
+		}
+	}(resp.Body)
 	return resp.StatusCode == http.StatusOK
 }
 
