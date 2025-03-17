@@ -43,12 +43,12 @@ func main() {
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
 	deepFloyd = &llm.DeepFloydWrapper{}
-	err = deepFloyd.Start()
-	if err != nil {
-		log.Fatalf("Failed to start DeepFloyd: %v", err)
-	}
 
-	defer deepFloyd.Stop()
+	_, err = deepFloyd.GenerateImage("A house")
+	if err != nil {
+		log.Fatalf("failed to generate image: %v", err)
+		return
+	}
 
 	startOllama()
 
