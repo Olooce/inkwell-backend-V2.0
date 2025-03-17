@@ -21,7 +21,7 @@ func NewOllamaClient(url string) *OllamaClient {
 	return &OllamaClient{
 		ollamaURL: url,
 		client: &http.Client{
-			Timeout: 60 * time.Second, // Set a timeout to avoid hanging requests
+			Timeout: 600 * time.Second, // Set a timeout to avoid hanging requests
 		},
 	}
 }
@@ -113,13 +113,30 @@ func (o *OllamaClient) GenerateQuestions(topic string, limit int) ([]string, err
 }
 
 func (o *OllamaClient) EvaluateAnswer(question, userAnswer, correctAnswer string) (bool, string, error) {
-	prompt := fmt.Sprintf("Question: %s\nUser Answer: %s\nCorrect Answer: %s\nIs the answer correct? Explain why.", question, userAnswer, correctAnswer)
+	// Instruct the model to output a minimal JSON response
+	prompt := fmt.Sprintf(
+		"Question: %s\nUser Answer: %s\nCorrect Answer: %s\n"+
+			"Evaluate the answer. Output minimal JSON with keys 'correct' (boolean) and 'feedback' (string).",
+		question, userAnswer, correctAnswer,
+	)
+
 	response, err := o.callOllama(prompt)
 	if err != nil {
 		return false, "", err
 	}
-	isCorrect := determineCorrectness(response)
-	return isCorrect, response, nil
+
+	// Expected JSON response structure:
+	// {"correct": true, "feedback": "Short feedback message"}
+	var result struct {
+		Correct  bool   `json:"correct"`
+		Feedback string `json:"feedback"`
+	}
+
+	if err := json.Unmarshal([]byte(response), &result); err != nil {
+		return false, "", fmt.Errorf("failed to parse JSON response: %w", err)
+	}
+
+	return result.Correct, result.Feedback, nil
 }
 
 func parseQuestions(response string) []string {
