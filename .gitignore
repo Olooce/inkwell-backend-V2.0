@@ -13,3 +13,13 @@ cmake-build-debug
 config.xml
 /internal/llm/deepfloyd_env/*
 !/internal/llm/deepfloyd_env/.keep
+
+
+# Ignore all files under working
+/working/*
+
+# But track this file so the folder remains in Git
+!/working/.gitignore
+!/working/.gitkeep
+
+!/working/storyImages/.gitkeep
