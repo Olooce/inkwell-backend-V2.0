@@ -1,8 +1,8 @@
 package llm
 
 /*
-#cgo CFLAGS: -I/usr/include/python3.13 -I/usr/include/python3.13 -fno-strict-overflow -Wsign-compare -fcf-protection -fexceptions -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG
-#cgo LDFLAGS: -L/usr/lib64 -ldl -lm
+#cgo CFLAGS: -I/usr/include/python3.13 -Wsign-compare -fexceptions -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG
+#cgo LDFLAGS: -L/usr/lib64 -lpython3.13 -ldl -lm -lpthread -lutil
 #include <Python.h>
 #include <stdlib.h>
 
@@ -110,9 +110,11 @@ func (d *DeepFloydWrapper) GenerateImage(prompt string) (string, error) {
 	if cResult == nil {
 		return "", fmt.Errorf("image generation failed")
 	}
-	defer C.free(unsafe.Pointer(cResult))
 
-	return C.GoString(cResult), nil
+	result := C.GoString(cResult)
+	C.free(unsafe.Pointer(cResult)) // Free allocated memory
+
+	return result, nil
 }
 
 // Stop cleans up the Python environment

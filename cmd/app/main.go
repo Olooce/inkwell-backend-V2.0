@@ -30,6 +30,7 @@ import (
 
 var ollamaCmd *exec.Cmd // Store the Ollama process
 var ollamaClient *llm.OllamaClient
+var deepFloyd *llm.DeepFloydWrapper
 
 func main() {
 	// Load XML configuration from file.
@@ -41,6 +42,14 @@ func main() {
 	printStartUpBanner()
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
+	deepFloyd = &llm.DeepFloydWrapper{}
+	err = deepFloyd.Start()
+	if err != nil {
+		log.Fatalf("Failed to start DeepFloyd: %v", err)
+	}
+
+	defer deepFloyd.Stop()
+
 	startOllama()
 
 	// Wait until Ollama is responsive before proceeding
