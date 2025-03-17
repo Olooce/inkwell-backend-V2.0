@@ -83,7 +83,10 @@ func (s *storyService) AddSentence(storyID uint, sentence string) (*model.Senten
 
 	// Run image generation concurrently.
 	go func() {
-		path, err := s.diffusionClient.GenerateImage(sentence)
+		comicPrompt := "Comic-style illustration with bold outlines, vibrant colors, and dynamic poses. Scene: " + sentence + ". " +
+			"Expressive characters and engaging composition like a graphic novel. Use strong lighting and shading for depth."
+
+		path, err := s.diffusionClient.GenerateImage(comicPrompt)
 		imageCh <- imageResult{path: path, err: err}
 	}()
 

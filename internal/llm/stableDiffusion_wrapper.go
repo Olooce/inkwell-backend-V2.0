@@ -50,7 +50,12 @@ func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	// Check if the response is an image by verifying the content type.
 	contentType := resp.Header.Get("Content-Type")
@@ -69,7 +74,12 @@ func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to create image file: %w", err)
 		}
-		defer file.Close()
+		defer func(file *os.File) {
+			err := file.Close()
+			if err != nil {
+
+			}
+		}(file)
 
 		_, err = io.Copy(file, resp.Body)
 		if err != nil {

@@ -9,7 +9,9 @@ import (
 // AuthMiddleware ensures each request is authenticated
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/auth") {
+		path := c.Request.URL.Path
+		// Allow unauthenticated access to static files and auth endpoints
+		if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/auth") {
 			c.Next()
 			return
 		}
