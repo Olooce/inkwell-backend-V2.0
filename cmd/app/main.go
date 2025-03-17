@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/common-nighthawk/go-figure"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"inkwell-backend-V2.0/internal/config"
@@ -62,14 +61,7 @@ func main() {
 	r := gin.Default()
 
 	// CORS configuration.
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	r.Use(utilities.CORSMiddleware())
 
 	//Authentication middleware
 	r.Use(utilities.AuthMiddleware())
