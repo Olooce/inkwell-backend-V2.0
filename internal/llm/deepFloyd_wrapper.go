@@ -10,15 +10,20 @@ import (
 // DeepFloydWrapper handles DeepFloyd image generation
 type DeepFloydWrapper struct{}
 
-// GenerateImage calls the Python script to create an image from a text prompt
 func (d *DeepFloydWrapper) GenerateImage(prompt string) (string, error) {
-	// Ensure the script path is absolute
+	// Get absolute paths for script and virtual environment
 	scriptPath, err := filepath.Abs("internal/llm/deepFloyd.py")
 	if err != nil {
 		return "", fmt.Errorf("failed to determine script path: %s", err)
 	}
 
-	cmd := exec.Command("python3", scriptPath, prompt)
+	venvPath, err := filepath.Abs("internal/llm/deepfloyd_env/bin/python")
+	if err != nil {
+		return "", fmt.Errorf("failed to determine virtual environment path: %s", err)
+	}
+
+	// Execute Python script using virtual environment's Python interpreter
+	cmd := exec.Command(venvPath, scriptPath, prompt)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to execute script: %s\nOutput: %s", err, output)
