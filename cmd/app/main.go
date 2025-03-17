@@ -159,7 +159,7 @@ func main() {
 				return
 			}
 
-			// Fetch the question directly by ID instead of looping through assessment.Questions
+			// Fetch the question by ID
 			question, err := assessmentRepo.GetQuestionByID(req.QuestionID)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
@@ -242,7 +242,7 @@ func main() {
 		<-signalChan
 		log.Println("Received termination signal. Shutting down gracefully...")
 
-		stopOllama() // Stop Ollama
+		stopOllama()
 
 		log.Println("Application shut down successfully.")
 		os.Exit(0)
