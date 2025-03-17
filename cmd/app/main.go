@@ -21,6 +21,7 @@ import (
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
 	"inkwell-backend-V2.0/internal/service"
+	"inkwell-backend-V2.0/utilities"
 )
 
 var ollamaCmd *exec.Cmd // Store the Ollama process
@@ -69,6 +70,9 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	//Authentication middleware
+	r.Use(utilities.AuthMiddleware())
 
 	// Auth routes.
 	auth := r.Group("/auth")
