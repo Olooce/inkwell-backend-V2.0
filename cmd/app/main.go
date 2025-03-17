@@ -370,7 +370,7 @@ func main() {
 	}
 
 	// Serve static files from "working" directory
-	r.Static("/static", "./working")
+	r.StaticFS("/static", http.Dir("./working"))
 
 	// Start the server
 	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)

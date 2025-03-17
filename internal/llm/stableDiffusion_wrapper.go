@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -75,7 +76,8 @@ func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 			return "", fmt.Errorf("failed to save image: %w", err)
 		}
 
-		return imagePath, nil
+		return strings.TrimPrefix(imagePath, "working/"), nil
+
 	}
 
 	// Otherwise, read the error response.
