@@ -1,27 +1,36 @@
 import sys
 import json
-import torch
-from diffusers import DiffusionPipeline
+import requests
 
-# Ensure access token is provided
+# Ensure access token and prompt are provided
 if len(sys.argv) < 3:
     print(json.dumps({"status": "error", "message": "Usage: script.py <access_token> <prompt>"}))
     sys.exit(1)
 
-# Read access token and prompt from command line arguments
 access_token = sys.argv[1]
 prompt = sys.argv[2]
 
-# Initialize DeepFloyd IF
-device = "cuda" if torch.cuda.is_available() else "cpu"
-pipe = DiffusionPipeline.from_pretrained("DeepFloyd/IF-I-M-v1.0", token=access_token).to(device)
+# Hugging Face Inference API URL
+api_url = "https://api-inference.huggingface.co/models/DeepFloyd/IF-I-M-v1.0"
+headers = {"Authorization": f"Bearer {access_token}"}
 
 def generate_image(prompt):
+    payload = {"inputs": prompt}
+
     try:
-        image = pipe(prompt).images[0]
-        path = "generated_image.png"
-        image.save(path)
-        return json.dumps({"status": "success", "path": path})
+        response = requests.post(api_url, headers=headers, json=payload)
+
+        # Check content type to determine if it's an image or an error message
+        if response.headers.get("content-type", "").startswith("image"):
+            path = "generated_image.png"
+            with open(path, "wb") as f:
+                f.write(response.content)
+            return json.dumps({"status": "success", "path": path})
+
+        # If not an image, it's likely an error message
+        else:
+            return json.dumps({"status": "error", "message": response.text})
+
     except Exception as e:
         return json.dumps({"status": "error", "message": str(e)})
 
