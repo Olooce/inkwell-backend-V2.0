@@ -20,6 +20,7 @@ type APIConfig struct {
 	Authentication AuthenticationConfig `xml:"AUTHENTICATION"`
 	Pagination     PaginationConfig     `xml:"PAGINATION"`
 	DB             DBConfig             `xml:"DB"`
+	THIRD_PARTY    ThirdPartyConfig     `xml:"THIRD_PARTY"`
 }
 
 // ContextConfig holds basic server settings.
@@ -29,6 +30,10 @@ type ContextConfig struct {
 	Path            string `xml:"PATH"`
 	TimeZone        string `xml:"TIME_ZONE"`
 	EnableBasicAuth bool   `xml:"ENABLE_BASIC_AUTH"`
+}
+
+type ThirdPartyConfig struct {
+	HFToken string `xml:"HF_TOKEN"`
 }
 
 // AuthenticationConfig holds authentication settings.

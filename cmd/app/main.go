@@ -42,6 +42,11 @@ func main() {
 	printStartUpBanner()
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
+
+	err = llm.AuthenticateHuggingFace(cfg)
+	if err != nil {
+		log.Fatalf("Hugging Face authentication failed: %v", err)
+	}
 	deepFloyd = &llm.DeepFloydWrapper{}
 
 	_, err = deepFloyd.GenerateImage("A house")

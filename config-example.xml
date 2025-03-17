@@ -33,4 +33,7 @@
             <CONN_MAX_LIFETIME>600</CONN_MAX_LIFETIME>
         </POOL>
     </DB>
+    <THIRD_PARTY>
+        <HF_TOKEN TYPE="WRITE">****</HF_TOKEN>
+    </THIRD_PARTY>
 </API>
