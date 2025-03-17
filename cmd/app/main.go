@@ -53,7 +53,7 @@ func main() {
 	preloadModel("mistral")
 
 	// Run migrations.
-	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{})
+	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{}, &model.Sentence{})
 	if err != nil {
 		log.Fatalf("AutoMigration Error: %v", err)
 		return

@@ -32,7 +32,7 @@ type Assessment struct {
 
 type Question struct {
 	ID             uint   `json:"id" gorm:"primaryKey"`
-	Category       string `json:"category" gorm:"not null"`                       // Relates questions to assessments
+	Category       string `json:"category" gorm:"not null"`
 	QuestionType   string `json:"question_type" gorm:"type:varchar(20);not null"` // "masked" or "error_correction"
 	MaskedSentence string `json:"masked_sentence" gorm:"type:text"`
 	ErrorSentence  string `json:"error_sentence" gorm:"type:text"`
@@ -62,6 +62,17 @@ type Story struct {
 	UserID    uint      `json:"user_id"`
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
+	Status    string    `json:"status" gorm:"default:'in_progress'"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Sentence struct {
+	ID            uint      `json:"id" gorm:"primaryKey"`
+	StoryID       uint      `json:"story_id"`
+	OriginalText  string    `json:"original_text"`
+	CorrectedText string    `json:"corrected_text"`
+	Feedback      string    `json:"feedback"`
+	ImageURL      string    `json:"image_url"`
+	CreatedAt     time.Time `json:"created_at"`
 }
