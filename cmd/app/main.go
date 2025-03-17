@@ -240,14 +240,52 @@ func main() {
 	}
 
 	// Story routes.
-	r.GET("/stories", func(c *gin.Context) {
-		stories, err := storyService.GetStories()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, stories)
-	})
+	storiesGroup := r.Group("/stories")
+	{
+		// Get all stories
+		storiesGroup.GET("/", func(c *gin.Context) {
+			stories, err := storyService.GetStories()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, stories)
+		})
+
+		// Start a new story
+		storiesGroup.POST("/start_story", func(c *gin.Context) {
+			var req struct {
+				Title string `json:"title" binding:"required"`
+			}
+
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+				return
+			}
+
+			userID, exists := c.Get("user_id")
+			if !exists {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+				return
+			}
+
+			// Convert userID to uint
+			uid, ok := userID.(uint)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
+				return
+			}
+
+			story, err := storyService.CreateStory(uid, req.Title)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create story"})
+				return
+			}
+
+			c.JSON(http.StatusCreated, story)
+		})
+	}
+
 	// **Graceful shutdown handling in a separate goroutine**
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)

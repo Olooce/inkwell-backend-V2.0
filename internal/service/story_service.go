@@ -7,6 +7,7 @@ import (
 
 type StoryService interface {
 	GetStories() ([]model.Story, error)
+	CreateStory(userID uint, title string) (*model.Story, error)
 }
 
 type storyService struct {
@@ -19,4 +20,18 @@ func NewStoryService(storyRepo repository.StoryRepository) StoryService {
 
 func (s *storyService) GetStories() ([]model.Story, error) {
 	return s.storyRepo.GetStories()
+}
+
+func (s *storyService) CreateStory(userID uint, title string) (*model.Story, error) {
+	story := &model.Story{
+		UserID: userID,
+		Title:  title,
+	}
+
+	err := s.storyRepo.CreateStory(story)
+	if err != nil {
+		return nil, err
+	}
+
+	return story, nil
 }
