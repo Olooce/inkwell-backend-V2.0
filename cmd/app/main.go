@@ -139,7 +139,7 @@ func main() {
 			ra := rand.New(src)
 			selectedTopic := grammarTopics[ra.Intn(len(grammarTopics))]
 
-			assessment, questions, err := assessmentService.CreateAssessment(selectedTopic)
+			assessment, questions, err := assessmentService.CreateAssessment(c, selectedTopic)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return

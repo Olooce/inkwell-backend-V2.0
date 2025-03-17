@@ -19,7 +19,7 @@ func NewOllamaClient(url string) *OllamaClient {
 	return &OllamaClient{
 		ollamaURL: url,
 		client: &http.Client{
-			Timeout: 10 * time.Second, // Set a timeout to avoid hanging requests
+			Timeout: 30 * time.Second, // Set a timeout to avoid hanging requests
 		},
 	}
 }
