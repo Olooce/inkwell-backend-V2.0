@@ -26,19 +26,24 @@ import (
 var ollamaCmd *exec.Cmd // Store the Ollama process
 
 func main() {
-	printStartUpBanner()
-	startOllama()
-
 	// Load XML configuration from file.
 	cfg, err := config.LoadConfig("config.xml")
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	printStartUpBanner()
+	startOllama()
+	ollamaClient := llm.NewOllamaClient("http://localhost:11434/api/generate")
+
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
 	// Run migrations.
-	db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{})
+	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{})
+	if err != nil {
+		log.Fatalf("AutoMigration Error: %v", err)
+		return
+	}
 
 	// Create repositories.
 	userRepo := repository.NewUserRepository()
@@ -48,7 +53,6 @@ func main() {
 	// Create services.
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
-	ollamaClient := llm.NewOllamaClient("http://localhost:11434/api/generate")
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 
 	storyService := service.NewStoryService(storyRepo)
@@ -122,8 +126,9 @@ func main() {
 				"Punctuation Rules",
 			}
 
-			rand.Seed(time.Now().UnixNano()) // Ensure randomness
-			selectedTopic := grammarTopics[rand.Intn(len(grammarTopics))]
+			src := rand.NewSource(time.Now().UnixNano())
+			ra := rand.New(src)
+			selectedTopic := grammarTopics[ra.Intn(len(grammarTopics))]
 
 			assessment, questions, err := assessmentService.CreateAssessment(selectedTopic)
 			if err != nil {

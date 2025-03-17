@@ -2,7 +2,7 @@ package config
 
 import (
 	"encoding/xml"
-	"io/ioutil"
+	"io"
 	"os"
 	"sync"
 )
@@ -82,9 +82,14 @@ func LoadConfig(xmlPath string) (*APIConfig, error) {
 		if err != nil {
 			return
 		}
-		defer f.Close()
+		defer func(f *os.File) {
+			err := f.Close()
+			if err != nil {
 
-		data, err := ioutil.ReadAll(f)
+			}
+		}(f)
+
+		data, err := io.ReadAll(f)
 		if err != nil {
 			return
 		}
