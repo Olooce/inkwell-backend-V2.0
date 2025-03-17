@@ -21,7 +21,7 @@ func NewOllamaClient(url string) *OllamaClient {
 	return &OllamaClient{
 		ollamaURL: url,
 		client: &http.Client{
-			Timeout: 30 * time.Second, // Set a timeout to avoid hanging requests
+			Timeout: 60 * time.Second, // Set a timeout to avoid hanging requests
 		},
 	}
 }
@@ -42,7 +42,12 @@ func (o *OllamaClient) callOllama(prompt string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	// Read the full response body
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -50,19 +55,52 @@ func (o *OllamaClient) callOllama(prompt string) (string, error) {
 		return "", err
 	}
 
+	fullBody := string(bodyBytes)
 	// Log the full response for debugging
-	log.Println("Full LLM response body:", string(bodyBytes))
+	//log.Println("Full LLM response body:", fullBody)
 
+	// If the response is streamed as multiple JSON objects (separated by newlines),
+	// aggregate them using our standalone function.
+	if strings.Contains(fullBody, "\n") {
+		aggregated := AggregateStreamedResponse(fullBody)
+		return aggregated, nil
+	}
+
+	// Otherwise, attempt to decode a single JSON object.
 	var result map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
 		return "", err
 	}
-
 	if responseText, ok := result["response"].(string); ok {
 		return responseText, nil
 	}
 
 	return "", errors.New("invalid response from Ollama")
+}
+
+type LLMResponseChunk struct {
+	Model     string `json:"model"`
+	CreatedAt string `json:"created_at"`
+	Response  string `json:"response"`
+	Done      bool   `json:"done"`
+}
+
+// AggregateStreamedResponse takes the full raw response body (a string with multiple JSON objects separated by newlines)
+// and concatenates the "response" fields into one final string.
+func AggregateStreamedResponse(body string) string {
+	lines := strings.Split(body, "\n")
+	var builder strings.Builder
+	for _, line := range lines {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			var chunk LLMResponseChunk
+			if err := json.Unmarshal([]byte(trimmed), &chunk); err != nil {
+				log.Println("Error unmarshaling chunk:", err)
+				continue
+			}
+			builder.WriteString(chunk.Response)
+		}
+	}
+	return builder.String()
 }
 
 func (o *OllamaClient) GenerateQuestions(topic string, limit int) ([]string, error) {
@@ -103,9 +141,10 @@ func (o *OllamaClient) CorrectSentence(sentence string) (string, string, error) 
 	prompt := "Please correct the following sentence if needed and provide feedback in the format 'Corrected: <corrected sentence> Feedback: <feedback message>': " + sentence
 	response, err := o.callOllama(prompt)
 	if err != nil {
+		log.Println("Error calling Ollama:", err)
 		return sentence, "Could not generate feedback", err
 	}
-	log.Println("LLM response:", response)
+	//log.Println("LLM response:", response)
 	// Parse response expecting: "Corrected: <corrected sentence> Feedback: <feedback message>"
 	parts := strings.Split(response, "Feedback:")
 	var correctedText, feedback string
