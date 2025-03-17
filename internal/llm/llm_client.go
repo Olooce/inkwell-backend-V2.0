@@ -7,14 +7,21 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type OllamaClient struct {
 	ollamaURL string
+	client    *http.Client
 }
 
 func NewOllamaClient(url string) *OllamaClient {
-	return &OllamaClient{ollamaURL: url}
+	return &OllamaClient{
+		ollamaURL: url,
+		client: &http.Client{
+			Timeout: 10 * time.Second, // Set a timeout to avoid hanging requests
+		},
+	}
 }
 
 func (o *OllamaClient) GenerateQuestions(topic string, limit int) ([]string, error) {
@@ -23,7 +30,6 @@ func (o *OllamaClient) GenerateQuestions(topic string, limit int) ([]string, err
 	if err != nil {
 		return nil, err
 	}
-
 	return parseQuestions(response), nil
 }
 
@@ -33,7 +39,6 @@ func (o *OllamaClient) EvaluateAnswer(question, userAnswer, correctAnswer string
 	if err != nil {
 		return false, "", err
 	}
-
 	isCorrect := determineCorrectness(response)
 	return isCorrect, response, nil
 }
@@ -50,8 +55,7 @@ func (o *OllamaClient) callOllama(prompt string) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := o.client.Do(req) // Use the persistent client
 	if err != nil {
 		return "", err
 	}

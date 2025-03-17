@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"inkwell-backend-V2.0/internal/llm"
 	"log"
@@ -24,6 +26,7 @@ import (
 )
 
 var ollamaCmd *exec.Cmd // Store the Ollama process
+var ollamaClient *llm.OllamaClient
 
 func main() {
 	// Load XML configuration from file.
@@ -34,7 +37,15 @@ func main() {
 
 	printStartUpBanner()
 	startOllama()
-	ollamaClient := llm.NewOllamaClient("http://localhost:11434/api/generate")
+
+	// Wait until Ollama is responsive before proceeding
+	waitForOllama()
+
+	// Initialize Ollama Client
+	ollamaClient = llm.NewOllamaClient("http://localhost:11434/api/generate")
+
+	// Preload the model
+	preloadModel("mistral")
 
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
@@ -264,15 +275,19 @@ func printStartUpBanner() {
 	fmt.Printf("INKWELL API (v%s)\n\n", "2.0.0-StoryScape")
 }
 
-// Start Ollama when the app starts
+// Start Ollama if not already running
 func startOllama() {
+	if isOllamaRunning() {
+		log.Println("Ollama is already running. Skipping startup.")
+		return
+	}
+
 	ollamaCmd = exec.Command("ollama", "serve")
 
-	// Redirect Ollama logs to the terminal
+	// Redirect logs to terminal
 	ollamaCmd.Stdout = os.Stdout
 	ollamaCmd.Stderr = os.Stderr
 
-	// Start Ollama
 	err := ollamaCmd.Start()
 	if err != nil {
 		log.Fatalf("Failed to start Ollama: %v", err)
@@ -280,11 +295,53 @@ func startOllama() {
 	log.Println("Ollama started successfully")
 }
 
-// Stop Ollama when the app exits
+// Check if Ollama is already running
+func isOllamaRunning() bool {
+	resp, err := http.Get("http://localhost:11434")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+// Wait until Ollama is ready
+func waitForOllama() {
+	for i := 0; i < 10; i++ { // Try 10 times before failing
+		if isOllamaRunning() {
+			log.Println("Ollama is now ready.")
+			return
+		}
+		log.Println("Waiting for Ollama to start...")
+		time.Sleep(2 * time.Second)
+	}
+	log.Fatal("Ollama did not start in time.")
+}
+
+// Preload Ollama model
+func preloadModel(modelName string) {
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"model": modelName,
+	})
+
+	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		log.Fatalf("Failed to preload model %s: %v", modelName, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		log.Printf("Model '%s' preloaded successfully.", modelName)
+	} else {
+		log.Printf("Failed to preload model '%s', status: %d", modelName, resp.StatusCode)
+	}
+}
+
+// Stop Ollama on shutdown
 func stopOllama() {
 	if ollamaCmd != nil {
 		log.Println("Stopping Ollama...")
-		err := ollamaCmd.Process.Signal(syscall.SIGTERM) // Gracefully stop Ollama
+		err := ollamaCmd.Process.Signal(syscall.SIGTERM)
 		if err != nil {
 			log.Printf("Failed to stop Ollama: %v", err)
 		}
