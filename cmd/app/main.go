@@ -69,7 +69,7 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 
-	storyService := service.NewStoryService(storyRepo)
+	storyService := service.NewStoryService(storyRepo, ollamaClient)
 
 	// Initialize Gin router.
 	r := gin.Default()

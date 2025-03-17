@@ -1,7 +1,6 @@
 package service
 
 import (
-	"strings"
 	"time"
 
 	"inkwell-backend-V2.0/internal/llm"
@@ -48,40 +47,24 @@ func (s *storyService) CreateStory(userID uint, title string) (*model.Story, err
 }
 
 func (s *storyService) AddSentence(storyID uint, sentence string) (*model.Sentence, error) {
+	// Create a new sentence record with the original text.
 	newSentence := &model.Sentence{
 		StoryID:      storyID,
 		OriginalText: sentence,
+		CreatedAt:    time.Now(),
 	}
 
-	// Use the LLM to correct the sentence and generate feedback.
-	prompt := "Please correct the following sentence if needed and provide feedback in the format 'Corrected: <corrected sentence> Feedback: <feedback message>': " + sentence
-	correctedResponse, err := s.llmClient.CallOllama(prompt)
+	// Use the LLM client to correct the sentence and generate feedback.
+	correctedText, feedback, err := s.llmClient.CorrectSentence(sentence)
 	if err != nil {
-		// Fall back to original sentence if there's an error.
+		// If there's an error, use defaults.
 		newSentence.CorrectedText = sentence
 		newSentence.Feedback = "Could not generate feedback"
 	} else {
-		// Parse the response. Expecting: "Corrected: ... Feedback: ..."
-		parts := strings.Split(correctedResponse, "Feedback:")
-		var correctedText, feedback string
-		if len(parts) >= 2 {
-			correctedPart := strings.TrimSpace(parts[0])
-			if strings.HasPrefix(correctedPart, "Corrected:") {
-				correctedText = strings.TrimSpace(strings.TrimPrefix(correctedPart, "Corrected:"))
-			} else {
-				correctedText = sentence
-			}
-			feedback = strings.TrimSpace(parts[1])
-		} else {
-			correctedText = sentence
-			feedback = "No feedback provided"
-		}
 		newSentence.CorrectedText = correctedText
 		newSentence.Feedback = feedback
 	}
-
 	newSentence.ImageURL = "default.png"
-	newSentence.CreatedAt = time.Now()
 
 	err = s.storyRepo.CreateSentence(newSentence)
 	if err != nil {
