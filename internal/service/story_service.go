@@ -49,6 +49,20 @@ func (s *storyService) CreateStory(userID uint, title string) (*model.Story, err
 	return story, nil
 }
 
+// result types for each asynchronous call
+type llmResult struct {
+	corrected string
+	feedback  string
+	err       error
+}
+
+type imageResult struct {
+	path string
+	err  error
+}
+
+// AddSentence creates a new sentence record, corrects the sentence using the LLM client,
+// generates an image using the diffusion client, and saves the result.
 func (s *storyService) AddSentence(storyID uint, sentence string) (*model.Sentence, error) {
 	// Create a new sentence record with the original text.
 	newSentence := &model.Sentence{
@@ -57,26 +71,46 @@ func (s *storyService) AddSentence(storyID uint, sentence string) (*model.Senten
 		CreatedAt:    time.Now(),
 	}
 
-	// Use the LLM client to correct the sentence and generate feedback.
-	correctedText, feedback, err := s.llmClient.CorrectSentence(sentence)
-	if err != nil {
-		// If there's an error, use defaults.
+	// Channels to receive results.
+	llmCh := make(chan llmResult)
+	imageCh := make(chan imageResult)
+
+	// Run LLM correction concurrently.
+	go func() {
+		corrected, feedback, err := s.llmClient.CorrectSentence(sentence)
+		llmCh <- llmResult{corrected: corrected, feedback: feedback, err: err}
+	}()
+
+	// Run image generation concurrently.
+	go func() {
+		path, err := s.diffusionClient.GenerateImage(sentence)
+		imageCh <- imageResult{path: path, err: err}
+	}()
+
+	// Wait for both operations to complete.
+	llmRes := <-llmCh
+	imgRes := <-imageCh
+
+	// Set corrected text and feedback.
+	if llmRes.err != nil {
 		newSentence.CorrectedText = sentence
 		newSentence.Feedback = "Could not generate feedback"
 	} else {
-		newSentence.CorrectedText = correctedText
-		newSentence.Feedback = feedback
+		newSentence.CorrectedText = llmRes.corrected
+		newSentence.Feedback = llmRes.feedback
 	}
 
-	imagePath, err := s.diffusionClient.GenerateImage(sentence)
-	if err != nil {
-		fmt.Printf("Warning: Failed to generate image: %v\n", err)
+	// Set image URL.
+	if imgRes.err != nil {
+		fmt.Printf("Warning: Failed to generate image: %v\n", imgRes.err)
+		newSentence.ImageURL = ""
 	} else {
-		fmt.Println("Generated image at:", imagePath)
+		fmt.Println("Generated image at:", imgRes.path)
+		newSentence.ImageURL = imgRes.path
 	}
-	newSentence.ImageURL = imagePath
 
-	err = s.storyRepo.CreateSentence(newSentence)
+	// Save the sentence record.
+	err := s.storyRepo.CreateSentence(newSentence)
 	if err != nil {
 		return nil, err
 	}

@@ -369,6 +369,15 @@ func main() {
 		})
 	}
 
+	// Serve static files from "working" directory
+	r.Static("/static", "./working")
+
+	// Start the server
+	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
+	if err := r.Run(addr); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
+
 	// **Graceful shutdown handling in a separate goroutine**
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
@@ -383,11 +392,6 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Start the server
-	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("Server failed: %v", err)
-	}
 }
 
 func printStartUpBanner() {

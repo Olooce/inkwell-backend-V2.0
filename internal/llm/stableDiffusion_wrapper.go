@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"time"
 )
 
 // StableDiffusionWrapper handles Stable Diffusion image generation using the Hugging Face Inference API.
@@ -52,7 +54,16 @@ func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 	// Check if the response is an image by verifying the content type.
 	contentType := resp.Header.Get("Content-Type")
 	if resp.StatusCode == http.StatusOK && len(contentType) >= 5 && contentType[:5] == "image" {
-		imagePath := "generated_image.png"
+		// Ensure the directory exists.
+		dir := "working/storyImages"
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			return "", fmt.Errorf("failed to create directory: %w", err)
+		}
+
+		// Generate a unique file name using a timestamp.
+		uniqueName := fmt.Sprintf("storyImage_%d.png", time.Now().UnixNano())
+		imagePath := filepath.Join(dir, uniqueName)
+
 		file, err := os.Create(imagePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to create image file: %w", err)
