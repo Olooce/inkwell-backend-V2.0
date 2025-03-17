@@ -56,7 +56,7 @@ func (r *assessmentRepository) GetRandomQuestions(topic string, limit int) ([]mo
 
 func (r *assessmentRepository) GetQuestionsByCategory(category string) ([]model.Question, error) {
 	var questions []model.Question
-	err := db.GetDB().Where("category = ?", category).Find(&questions).Error // Fixed incorrect `r.db.GetDB()`
+	err := db.GetDB().Where("category = ?", category).Find(&questions).Error
 	return questions, err
 }
 
