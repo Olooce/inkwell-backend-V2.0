@@ -1,8 +1,9 @@
 package llm
 
 /*
-#cgo CFLAGS: -I/usr/include/python3.13 -Wsign-compare -fexceptions -DDYNAMIC_ANNOTATIONS_ENABLED=1 -DNDEBUG
-#cgo LDFLAGS: -L/usr/lib64 -lpython3.13 -ldl -lm -lpthread -lutil
+#cgo CFLAGS: -I/home/oloo/GolandProjects/inkwell-backend-V2.0/internal/llm/deepfloyd_env/include/python3.13
+#cgo LDFLAGS: -L/home/oloo/GolandProjects/inkwell-backend-V2.0/internal/llm/deepfloyd_env/lib -lpython3.13
+
 #include <Python.h>
 #include <stdlib.h>
 
