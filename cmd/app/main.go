@@ -43,11 +43,11 @@ func main() {
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
 
-	err = llm.AuthenticateHuggingFace(cfg)
-	if err != nil {
-		log.Fatalf("Hugging Face authentication failed: %v", err)
-	}
-	deepFloyd = &llm.DeepFloydWrapper{}
+	//err = llm.AuthenticateHuggingFace(cfg)
+	//if err != nil {
+	//	log.Fatalf("Hugging Face authentication failed: %v", err)
+	//}
+	deepFloyd = &llm.DeepFloydWrapper{AccessToken: cfg.THIRD_PARTY.HFToken}
 
 	_, err = deepFloyd.GenerateImage("A house")
 	if err != nil {

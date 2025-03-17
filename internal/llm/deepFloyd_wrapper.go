@@ -8,8 +8,11 @@ import (
 )
 
 // DeepFloydWrapper handles DeepFloyd image generation
-type DeepFloydWrapper struct{}
+type DeepFloydWrapper struct {
+	AccessToken string
+}
 
+// GenerateImage generates an image from a prompt using DeepFloyd
 func (d *DeepFloydWrapper) GenerateImage(prompt string) (string, error) {
 	// Get absolute paths for script and virtual environment
 	scriptPath, err := filepath.Abs("internal/llm/deepFloyd.py")
@@ -22,8 +25,13 @@ func (d *DeepFloydWrapper) GenerateImage(prompt string) (string, error) {
 		return "", fmt.Errorf("failed to determine virtual environment path: %s", err)
 	}
 
-	// Execute Python script using virtual environment's Python interpreter
-	cmd := exec.Command(venvPath, scriptPath, prompt)
+	// Ensure access token is set
+	if d.AccessToken == "" {
+		return "", fmt.Errorf("missing DeepFloyd access token")
+	}
+
+	// Execute Python script with access token and prompt
+	cmd := exec.Command(venvPath, scriptPath, d.AccessToken, prompt)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to execute script: %s\nOutput: %s", err, output)

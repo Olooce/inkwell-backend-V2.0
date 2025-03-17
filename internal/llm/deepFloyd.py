@@ -3,9 +3,18 @@ import json
 import torch
 from diffusers import DiffusionPipeline
 
+# Ensure access token is provided
+if len(sys.argv) < 3:
+    print(json.dumps({"status": "error", "message": "Usage: script.py <access_token> <prompt>"}))
+    sys.exit(1)
+
+# Read access token and prompt from command line arguments
+access_token = sys.argv[1]
+prompt = sys.argv[2]
+
 # Initialize DeepFloyd IF
 device = "cuda" if torch.cuda.is_available() else "cpu"
-pipe = DiffusionPipeline.from_pretrained("DeepFloyd/IF-I-M-v1.0").to(device)
+pipe = DiffusionPipeline.from_pretrained("DeepFloyd/IF-I-M-v1.0", token=access_token).to(device)
 
 def generate_image(prompt):
     try:
@@ -17,9 +26,4 @@ def generate_image(prompt):
         return json.dumps({"status": "error", "message": str(e)})
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print(json.dumps({"status": "error", "message": "No prompt provided"}))
-        sys.exit(1)
-
-    prompt = sys.argv[1]
     print(generate_image(prompt))
