@@ -1,8 +1,8 @@
 package llm
 
 /*
-#cgo CFLAGS: -I/home/oloo/GolandProjects/inkwell-backend-V2.0/internal/llm/deepfloyd_env/include/python3.13
-#cgo LDFLAGS: -L/home/oloo/GolandProjects/inkwell-backend-V2.0/internal/llm/deepfloyd_env/lib -lpython3.13
+#cgo CFLAGS: -Iinternal/llm/deepfloyd_env/include/python3.10
+#cgo LDFLAGS: -Linternal/llm/deepfloyd_env/lib -lpython3.10
 
 #include <Python.h>
 #include <stdlib.h>
