@@ -14,6 +14,10 @@ type AssessmentRepository interface {
 	GetRandomQuestions(topic string, limit int) ([]model.Question, error)
 	GetQuestionsByCategory(category string) ([]model.Question, error)
 	GetQuestionByID(questionID uint) (*model.Question, error)
+
+	CountAnswersByAssessmentID(assessmentID uint) (int, error)
+	MarkUserAssessmentCompleted(userID uint) error
+	UpdateAssessment(assessment *model.Assessment) error
 }
 
 type assessmentRepository struct{}
@@ -67,4 +71,21 @@ func (r *assessmentRepository) GetQuestionByID(questionID uint) (*model.Question
 		return nil, err
 	}
 	return &question, nil
+}
+
+// Count the number of answered questions for an assessment
+func (r *assessmentRepository) CountAnswersByAssessmentID(assessmentID uint) (int, error) {
+	var count int64
+	err := db.GetDB().Model(&model.Answer{}).Where("assessment_id = ?", assessmentID).Count(&count).Error
+	return int(count), err
+}
+
+// Mark the user as having completed their assessment
+func (r *assessmentRepository) MarkUserAssessmentCompleted(userID uint) error {
+	return db.GetDB().Model(&model.User{}).Where("id = ?", userID).Update("initial_assessment_completed", true).Error
+}
+
+// Update assessment details
+func (r *assessmentRepository) UpdateAssessment(assessment *model.Assessment) error {
+	return db.GetDB().Save(assessment).Error
 }

@@ -66,9 +66,14 @@ func (s *assessmentService) GetAssessmentBySessionID(sessionID string) (*model.A
 	return s.assessmentRepo.GetAssessmentBySessionID(sessionID)
 }
 
-// SaveAnswer - Stores an answer and evaluates it using the LLM module
 func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerResponse, error) {
-	// Fetch the question directly by ID
+	// Fetch the assessment
+	assessment, err := s.assessmentRepo.GetAssessmentBySessionID(answer.SessionID)
+	if err != nil {
+		return nil, fmt.Errorf("assessment not found")
+	}
+
+	// Fetch the question
 	question, err := s.assessmentRepo.GetQuestionByID(answer.QuestionID)
 	if err != nil {
 		return nil, fmt.Errorf("question not found")
@@ -84,7 +89,7 @@ func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerRespo
 		return nil, fmt.Errorf("unknown question type: %s", question.QuestionType)
 	}
 
-	// Use the LLM to evaluate the answer
+	// Evaluate the answer using LLM
 	isCorrect, feedback, err := s.ollamaClient.EvaluateAnswer(questionText, answer.Answer, question.CorrectAnswer)
 	if err != nil {
 		return nil, err
@@ -98,9 +103,36 @@ func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerRespo
 		return nil, err
 	}
 
+	// Update assessment score
+	if isCorrect {
+		assessment.Score += 1 // Increment score for correct answers
+	}
+
+	// Check if all questions have been answered
+	answeredCount, err := s.assessmentRepo.CountAnswersByAssessmentID(assessment.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If all questions are answered, mark assessment as completed
+	if answeredCount >= len(assessment.Questions) {
+		assessment.Status = "completed"
+
+		// Mark user as having completed assessment
+		err = s.assessmentRepo.MarkUserAssessmentCompleted(assessment.UserID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Save updated assessment
+	err = s.assessmentRepo.UpdateAssessment(assessment)
+	if err != nil {
+		return nil, err
+	}
+
 	return &model.AnswerResponse{
 		IsCorrect: isCorrect,
 		Feedback:  feedback,
 	}, nil
-
 }
