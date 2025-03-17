@@ -30,7 +30,7 @@ import (
 
 var ollamaCmd *exec.Cmd // Store the Ollama process
 var ollamaClient *llm.OllamaClient
-var deepFloyd *llm.DeepFloydWrapper
+var diffussionClient *llm.StableDiffusionWrapper
 
 func main() {
 	// Load XML configuration from file.
@@ -47,14 +47,14 @@ func main() {
 	//if err != nil {
 	//	log.Fatalf("Hugging Face authentication failed: %v", err)
 	//}
-	deepFloyd = &llm.DeepFloydWrapper{AccessToken: cfg.THIRD_PARTY.HFToken}
+	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.THIRD_PARTY.HFToken}
 
-	imagePath, err := deepFloyd.GenerateImage("A house")
-	if err != nil {
-		fmt.Printf("Warning: Failed to generate image: %v\n", err)
-	} else {
-		fmt.Println("Generated image at:", imagePath)
-	}
+	//imagePath, err := diffussionClient.GenerateImage("A house")
+	//if err != nil {
+	//	fmt.Printf("Warning: Failed to generate image: %v\n", err)
+	//} else {
+	//	fmt.Println("Generated image at:", imagePath)
+	//}
 
 	startOllama()
 
@@ -84,7 +84,7 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 
-	storyService := service.NewStoryService(storyRepo, ollamaClient)
+	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
 
 	// Initialize Gin router.
 	r := gin.Default()

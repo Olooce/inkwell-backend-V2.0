@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"time"
 
 	"inkwell-backend-V2.0/internal/llm"
@@ -17,14 +18,16 @@ type StoryService interface {
 }
 
 type storyService struct {
-	storyRepo repository.StoryRepository
-	llmClient *llm.OllamaClient
+	storyRepo       repository.StoryRepository
+	llmClient       *llm.OllamaClient
+	diffusionClient *llm.StableDiffusionWrapper
 }
 
-func NewStoryService(storyRepo repository.StoryRepository, llmClient *llm.OllamaClient) StoryService {
+func NewStoryService(storyRepo repository.StoryRepository, llmClient *llm.OllamaClient, diffusionClient *llm.StableDiffusionWrapper) StoryService {
 	return &storyService{
-		storyRepo: storyRepo,
-		llmClient: llmClient,
+		storyRepo:       storyRepo,
+		llmClient:       llmClient,
+		diffusionClient: diffusionClient,
 	}
 }
 
@@ -64,7 +67,14 @@ func (s *storyService) AddSentence(storyID uint, sentence string) (*model.Senten
 		newSentence.CorrectedText = correctedText
 		newSentence.Feedback = feedback
 	}
-	newSentence.ImageURL = "default.png"
+
+	imagePath, err := s.diffusionClient.GenerateImage(sentence)
+	if err != nil {
+		fmt.Printf("Warning: Failed to generate image: %v\n", err)
+	} else {
+		fmt.Println("Generated image at:", imagePath)
+	}
+	newSentence.ImageURL = imagePath
 
 	err = s.storyRepo.CreateSentence(newSentence)
 	if err != nil {
