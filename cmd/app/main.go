@@ -49,10 +49,11 @@ func main() {
 	//}
 	deepFloyd = &llm.DeepFloydWrapper{AccessToken: cfg.THIRD_PARTY.HFToken}
 
-	_, err = deepFloyd.GenerateImage("A house")
+	imagePath, err := deepFloyd.GenerateImage("A house")
 	if err != nil {
-		log.Fatalf("failed to generate image: %v", err)
-		return
+		fmt.Printf("Warning: Failed to generate image: %v\n", err)
+	} else {
+		fmt.Println("Generated image at:", imagePath)
 	}
 
 	startOllama()
