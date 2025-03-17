@@ -36,6 +36,8 @@ func main() {
 	}
 
 	printStartUpBanner()
+	// Initialize DB using the loaded config.
+	db.InitDBFromConfig(cfg)
 	startOllama()
 
 	// Wait until Ollama is responsive before proceeding
@@ -47,8 +49,6 @@ func main() {
 	// Preload the model
 	preloadModel("mistral")
 
-	// Initialize DB using the loaded config.
-	db.InitDBFromConfig(cfg)
 	// Run migrations.
 	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{})
 	if err != nil {
