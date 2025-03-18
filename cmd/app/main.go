@@ -419,7 +419,7 @@ func main() {
 	r.StaticFS("/static", http.Dir("./working"))
 
 	// Serve PDFs with download headers
-	r.GET("/static/comics/:filename", func(c *gin.Context) {
+	r.GET("/download/comics/:filename", func(c *gin.Context) {
 		filename := c.Param("filename")
 		filePath := "./working/comics/" + filename
 
