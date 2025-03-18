@@ -86,7 +86,7 @@ func main() {
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 
 	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
-
+	
 	// Initialize Gin router.
 	r := gin.Default()
 

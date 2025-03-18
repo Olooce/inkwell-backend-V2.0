@@ -126,6 +126,11 @@ func (s *storyService) CompleteStory(storyID uint) error {
 	if err != nil {
 		return err
 	}
+	// Ensure the story is saved before triggering comic generation
+	story, err := s.storyRepo.GetCurrentStoryByUser(storyID)
+	if err != nil || story == nil {
+		return fmt.Errorf("story completion confirmed but failed to fetch story for comic generation: %w", err)
+	}
 
 	// Trigger comic generation asynchronously
 	go func(storyID uint) {
