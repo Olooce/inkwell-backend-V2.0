@@ -103,10 +103,11 @@ func (s *comicService) GenerateComic(storyID uint) error {
 		Title:       story.Title,
 		StoryID:     story.ID,
 		Thumbnail:   generateThumbnail(sentences),
-		ViewURL:     outputPath,
-		DownloadURL: outputPath,
+		ViewURL:     filepath.Join("comics", fmt.Sprintf("comic_%d.pdf", storyID)),
+		DownloadURL: filepath.Join("comics", fmt.Sprintf("comic_%d.pdf", storyID)),
 		DoneOn:      time.Now(),
 	}
+
 	err = s.storyRepo.SaveComic(&comic)
 	if err != nil {
 		return fmt.Errorf("failed to save comic record: %w", err)

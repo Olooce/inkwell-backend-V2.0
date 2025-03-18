@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -416,6 +417,20 @@ func main() {
 
 	// Serve static files from "working" directory
 	r.StaticFS("/static", http.Dir("./working"))
+
+	// Serve PDFs with download headers
+	r.GET("/static/comics/:filename", func(c *gin.Context) {
+		filename := c.Param("filename")
+		filePath := "./working/comics/" + filename
+
+		// Check if it's a PDF
+		if filepath.Ext(filename) == ".pdf" {
+			c.Header("Content-Disposition", "attachment; filename="+filename)
+			c.Header("Content-Type", "application/pdf")
+		}
+
+		c.File(filePath)
+	})
 
 	// Start the server
 	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
