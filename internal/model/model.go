@@ -79,7 +79,7 @@ type Sentence struct {
 type Comic struct {
 	ID          uint      `json:"id" gorm:"primaryKey"`
 	UserID      uint      `json:"user_id"`
-	StoryID     uint      `json:"story_id"`
+	StoryID     uint      `json:"story_id" gorm:"not null;index"`
 	Title       string    `json:"title"`
 	Thumbnail   string    `json:"thumbnail"`
 	ViewURL     string    `json:"view_url"`
