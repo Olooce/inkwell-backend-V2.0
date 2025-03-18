@@ -16,7 +16,7 @@ func CORSMiddleware() gin.HandlerFunc {
 		c.Writer.Header().Set("Content-Type", "application/json")
 		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, PATCH, DELETE")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, ngrok-skip-browser-warning")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Expose-Headers", "")
 		c.Writer.Header().Set("Access-Control-Max-Age", "86400") // Cache for 24 hours
