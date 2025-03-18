@@ -127,6 +127,24 @@ func main() {
 			}
 			c.JSON(http.StatusOK, user)
 		})
+
+		auth.POST("/refresh", func(c *gin.Context) {
+			var request struct {
+				RefreshToken string `json:"refresh_token"`
+			}
+			if err := c.ShouldBindJSON(&request); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+				return
+			}
+
+			newTokens, err := authService.RefreshTokens(request.RefreshToken)
+			if err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, newTokens)
+		})
 	}
 
 	// User routes.

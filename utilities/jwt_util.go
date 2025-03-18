@@ -44,6 +44,7 @@ func GenerateTokens(user *model.User) (string, string, error) {
 }
 
 // ValidateToken verifies the token and extracts claims
+// ValidateToken verifies the token and extracts claims
 func ValidateToken(tokenStr string, isRefresh bool) (*Claims, error) {
 	secret := accessSecret
 	if isRefresh {
@@ -55,24 +56,35 @@ func ValidateToken(tokenStr string, isRefresh bool) (*Claims, error) {
 	})
 
 	if err != nil {
-		return nil, errors.New("invalid token")
+		return nil, errors.New("invalid or malformed token")
 	}
 
-	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
-		return claims, nil
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid token claims")
 	}
 
-	return nil, errors.New("invalid token claims")
+	// Explicitly check expiration
+	if claims.ExpiresAt.Time.Before(time.Now()) {
+		return nil, errors.New("token has expired")
+	}
+
+	return claims, nil
 }
 
 // RefreshTokens generates a new access and refresh token using a valid refresh token
 func RefreshTokens(refreshToken string) (string, string, error) {
 	claims, err := ValidateToken(refreshToken, true)
 	if err != nil {
-		return "", "", errors.New("invalid refresh token")
+		return "", "", errors.New("invalid or expired refresh token")
 	}
 
-	// Create new tokens
+	// Explicitly check if the refresh token is expired
+	if claims.ExpiresAt.Time.Before(time.Now()) {
+		return "", "", errors.New("refresh token has expired")
+	}
+
+	// Generate new tokens
 	newAccessToken, newRefreshToken, err := GenerateTokens(&model.User{
 		ID:       claims.UserID,
 		Username: claims.Username,
