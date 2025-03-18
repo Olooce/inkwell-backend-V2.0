@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"inkwell-backend-V2.0/utilities"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,6 +22,21 @@ type comicService struct {
 
 func NewComicService(storyRepo repository.StoryRepository) ComicService {
 	return &comicService{storyRepo: storyRepo}
+}
+func InitComicEventListeners(storyRepo repository.StoryRepository) {
+	utilities.GlobalEventBus.Subscribe("story_completed", func(data interface{}) {
+		storyID, ok := data.(uint)
+		if !ok {
+			fmt.Println("Invalid story ID received for comic generation")
+			return
+		}
+
+		comicService := NewComicService(storyRepo)
+		err := comicService.GenerateComic(storyID)
+		if err != nil {
+			fmt.Printf("Error generating comic for story %d: %v\n", storyID, err)
+		}
+	})
 }
 
 func (s *comicService) GenerateComic(storyID uint) error {

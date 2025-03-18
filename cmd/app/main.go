@@ -31,7 +31,6 @@ import (
 var ollamaCmd *exec.Cmd // Store the Ollama process
 var ollamaClient *llm.OllamaClient
 var diffussionClient *llm.StableDiffusionWrapper
-var EventBus = utilities.NewEventBus()
 
 func main() {
 	// Load XML configuration from file.
@@ -81,11 +80,13 @@ func main() {
 	assessmentRepo := repository.NewAssessmentRepository()
 	storyRepo := repository.NewStoryRepository()
 
+	// Register event listeners
+	service.InitComicEventListeners(storyRepo)
+
 	// Create services.
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
-
 	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
 
 	// Initialize Gin router.

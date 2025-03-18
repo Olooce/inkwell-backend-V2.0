@@ -2,12 +2,12 @@ package service
 
 import (
 	"fmt"
+	"inkwell-backend-V2.0/utilities"
 	"time"
 
 	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
-	"inkwell-backend-V2.0/utilities"
 )
 
 type StoryService interface {
@@ -127,8 +127,15 @@ func (s *storyService) CompleteStory(storyID uint) error {
 	if err != nil {
 		return err
 	}
+
+	// Ensure the story is saved before triggering comic generation
+	story, err := s.storyRepo.GetCurrentStoryByUser(storyID)
+	if err != nil || story == nil {
+		return fmt.Errorf("story completion confirmed but failed to fetch story for comic generation: %w", err)
+	}
+
 	// Publish event for comic generation
-	EventBus.Publish("story_completed", storyID)
+	utilities.GlobalEventBus.Publish("story_completed", storyID)
 
 	return nil
 }
