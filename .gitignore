@@ -16,10 +16,7 @@ config.xml
 
 
 # Ignore all files under working
-/working/*
+working/*
+!working/.gitkeep
+!working/storyImages/.gitkeep
 
-# But track this file so the folder remains in Git
-!/working/.gitignore
-!/working/.gitkeep
-
-!/working/storyImages/.gitkeep
