@@ -79,3 +79,17 @@ func (r *storyRepository) GetComicsByUser(userID uint) ([]model.Comic, error) {
 	}
 	return comics, nil
 }
+
+func (r *storyRepository) GetAllStoriesWithoutComics() ([]model.Story, error) {
+	var stories []model.Story
+	err := r.db.Raw(`
+        SELECT * FROM stories 
+        WHERE title NOT IN (SELECT title FROM comics)
+    `).Scan(&stories).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return stories, nil
+}
