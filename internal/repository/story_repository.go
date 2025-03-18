@@ -13,6 +13,7 @@ type StoryRepository interface {
 	GetCurrentStoryByUser(userID uint) (*model.Story, error)
 	GetSentenceCount(storyID uint) (int, error)
 	GetSentencesByStory(storyID uint) ([]model.Sentence, error)
+	SaveComic(comic *model.Comic) error
 	GetComicsByUser(userID uint) ([]model.Comic, error)
 }
 
@@ -57,6 +58,10 @@ func (r *storyRepository) GetSentencesByStory(storyID uint) ([]model.Sentence, e
 	var sentences []model.Sentence
 	err := db.GetDB().Where("story_id = ?", storyID).Find(&sentences).Error
 	return sentences, err
+}
+
+func (r *storyRepository) SaveComic(comic *model.Comic) error {
+	return db.GetDB().Create(comic).Error
 }
 
 func (r *storyRepository) GetComicsByUser(userID uint) ([]model.Comic, error) {

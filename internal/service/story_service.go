@@ -122,7 +122,21 @@ func (s *storyService) AddSentence(storyID uint, sentence string) (*model.Senten
 }
 
 func (s *storyService) CompleteStory(storyID uint) error {
-	return s.storyRepo.CompleteStory(storyID)
+	err := s.storyRepo.CompleteStory(storyID)
+	if err != nil {
+		return err
+	}
+
+	// Trigger comic generation asynchronously
+	go func(storyID uint) {
+		comicService := NewComicService(s.storyRepo)
+		err := comicService.GenerateComic(storyID)
+		if err != nil {
+			fmt.Printf("Error generating comic for story %d: %v\n", storyID, err)
+		}
+	}(storyID)
+
+	return nil
 }
 
 func (s *storyService) GetProgress(userID uint) (map[string]interface{}, error) {

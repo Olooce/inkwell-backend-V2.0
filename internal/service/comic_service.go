@@ -65,7 +65,7 @@ func (s *comicService) GenerateComic(storyID uint) error {
 	comic := model.Comic{
 		UserID:      story.UserID,
 		Title:       story.Title,
-		Thumbnail:   "", // 	Todo: generate a thumbnail
+		Thumbnail:   generateThumbnail(sentences),
 		ViewURL:     outputPath,
 		DownloadURL: outputPath,
 		DoneOn:      time.Now(),
@@ -76,4 +76,13 @@ func (s *comicService) GenerateComic(storyID uint) error {
 	}
 
 	return nil
+}
+
+func generateThumbnail(sentences []model.Sentence) string {
+	for _, sentence := range sentences {
+		if sentence.ImageURL != "" {
+			return sentence.ImageURL // First image as thumbnail
+		}
+	}
+	return ""
 }
