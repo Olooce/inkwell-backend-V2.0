@@ -44,7 +44,6 @@ func GenerateTokens(user *model.User) (string, string, error) {
 }
 
 // ValidateToken verifies the token and extracts claims
-// ValidateToken verifies the token and extracts claims
 func ValidateToken(tokenStr string, isRefresh bool) (*Claims, error) {
 	secret := accessSecret
 	if isRefresh {
