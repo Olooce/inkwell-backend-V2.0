@@ -12,6 +12,7 @@ type StoryRepository interface {
 	CompleteStory(storyID uint) error
 	GetCurrentStoryByUser(userID uint) (*model.Story, error)
 	GetSentenceCount(storyID uint) (int, error)
+	GetComicsByUser(userID uint) ([]model.Comic, error)
 }
 
 type storyRepository struct{}
@@ -49,4 +50,13 @@ func (r *storyRepository) GetSentenceCount(storyID uint) (int, error) {
 	var count int64
 	err := db.GetDB().Model(&model.Sentence{}).Where("story_id = ?", storyID).Count(&count).Error
 	return int(count), err
+}
+
+func (r *storyRepository) GetComicsByUser(userID uint) ([]model.Comic, error) {
+	var comics []model.Comic
+	result := r.db.Where("user_id = ?", userID).Find(&comics)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return comics, nil
 }

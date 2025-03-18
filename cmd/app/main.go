@@ -385,6 +385,28 @@ func main() {
 			}
 			c.JSON(http.StatusOK, progress)
 		})
+
+		// GET /stories/comics: Get all generated comics for the user
+		storiesGroup.GET("/comics", func(c *gin.Context) {
+			userID, exists := c.Get("user_id")
+			if !exists {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+				return
+			}
+			uid, ok := userID.(uint)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
+				return
+			}
+
+			comics, err := storyService.GetComicsByUser(uid)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve comics"})
+				return
+			}
+
+			c.JSON(http.StatusOK, comics)
+		})
 	}
 
 	// Serve static files from "working" directory

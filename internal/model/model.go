@@ -76,3 +76,12 @@ type Sentence struct {
 	ImageURL      string    `json:"image_url"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+type Comic struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	UserID      uint      `json:"user_id"`
+	Title       string    `json:"title"`
+	Thumbnail   string    `json:"thumbnail"`
+	ViewURL     string    `json:"view_url"`
+	DownloadURL string    `json:"download_url"`
+	DoneOn      time.Time `json:"done_on"`
+}

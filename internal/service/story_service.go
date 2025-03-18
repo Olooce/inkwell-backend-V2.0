@@ -15,6 +15,7 @@ type StoryService interface {
 	AddSentence(storyID uint, sentence string) (*model.Sentence, error)
 	CompleteStory(storyID uint) error
 	GetProgress(userID uint) (map[string]interface{}, error)
+	GetComicsByUser(userID uint) ([]model.Comic, error)
 }
 
 type storyService struct {
@@ -139,4 +140,12 @@ func (s *storyService) GetProgress(userID uint) (map[string]interface{}, error) 
 		"story_status":           story.Status,
 	}
 	return progress, nil
+}
+
+func (s *storyService) GetComicsByUser(userID uint) ([]model.Comic, error) {
+	comics, err := s.storyRepo.GetComicsByUser(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch comics: %w", err)
+	}
+	return comics, nil
 }
