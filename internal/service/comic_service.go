@@ -1,11 +1,14 @@
 package service
 
 import (
+	"encoding/base64"
 	"fmt"
 	"inkwell-backend-V2.0/utilities"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
@@ -42,6 +45,14 @@ func InitComicEventListeners(storyRepo repository.StoryRepository) {
 	})
 }
 
+func encodeImageToBase64(imgPath string) (string, error) {
+	imgData, err := ioutil.ReadFile(imgPath)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(imgData), nil
+}
+
 func (s *comicService) GenerateComic(storyID uint) error {
 	log.Printf("[Start] Generating comic for story ID %d", storyID)
 
@@ -70,12 +81,22 @@ func (s *comicService) GenerateComic(storyID uint) error {
 
 	for _, sentence := range sentences {
 		pdf.SetFont("Arial", "", 12)
-		imgPath := filepath.Join("working", sentence.ImageURL)
+		imgPath := sentence.ImageURL
+		if !filepath.IsAbs(imgPath) {
+			imgPath = filepath.Join("working", imgPath)
+		}
+
 		log.Printf("Processing image: %s", imgPath)
 		if sentence.ImageURL != "" {
 			if _, err := os.Stat(imgPath); err == nil {
 				log.Printf("Image found: %s", imgPath)
-				pdf.Image(imgPath, 10, pdf.GetY(), 180, 100, false, "", 0, "")
+				base64Img, err := encodeImageToBase64(imgPath)
+				if err == nil {
+					pdf.RegisterImageOptionsReader(imgPath, gofpdf.ImageOptions{ImageType: "JPG"}, base64.NewDecoder(base64.StdEncoding, strings.NewReader(base64Img)))
+					pdf.Image(imgPath, 10, pdf.GetY(), 180, 100, false, "", 0, "")
+				} else {
+					log.Printf("Error encoding image to Base64: %v", err)
+				}
 				pdf.Ln(105)
 			} else {
 				log.Printf("Image not found: %s, adding empty box", imgPath)

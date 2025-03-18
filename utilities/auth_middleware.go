@@ -11,7 +11,7 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 		// Allow unauthenticated access to static files and auth endpoints
-		if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/auth") {
+		if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/auth") || strings.HasPrefix(path, "/download") {
 			c.Next()
 			return
 		}
