@@ -7,6 +7,7 @@ import (
 
 type StoryRepository interface {
 	GetStories() ([]model.Story, error)
+	GetStoryByID(storyID uint) (*model.Story, error)
 	CreateStory(story *model.Story) error
 	CreateSentence(sentence *model.Sentence) error
 	CompleteStory(storyID uint) error
@@ -27,6 +28,12 @@ func (r *storyRepository) GetStories() ([]model.Story, error) {
 	var stories []model.Story
 	err := db.GetDB().Find(&stories).Error
 	return stories, err
+}
+
+func (r *storyRepository) GetStoryByID(storyID uint) (*model.Story, error) {
+	var story model.Story
+	err := db.GetDB().Where("id = ?", storyID).First(&story).Error
+	return &story, err
 }
 
 func (r *storyRepository) CreateStory(story *model.Story) error {

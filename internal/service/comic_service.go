@@ -40,7 +40,7 @@ func InitComicEventListeners(storyRepo repository.StoryRepository) {
 }
 
 func (s *comicService) GenerateComic(storyID uint) error {
-	story, err := s.storyRepo.GetCurrentStoryByUser(storyID)
+	story, err := s.storyRepo.GetStoryByID(storyID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch story: %w", err)
 	}
@@ -55,17 +55,31 @@ func (s *comicService) GenerateComic(storyID uint) error {
 	pdf.SetFont("Arial", "B", 16)
 	pdf.AddPage()
 
+	// Story Title
 	pdf.Cell(40, 10, story.Title)
 	pdf.Ln(20)
 
 	for _, sentence := range sentences {
+		pdf.SetFont("Arial", "", 12)
+
 		if sentence.ImageURL != "" {
-			imgPath := filepath.Join("working/storyImages", filepath.Base(sentence.ImageURL))
+			imgPath := filepath.Join("working", sentence.ImageURL) // Ensure correct path
 			if _, err := os.Stat(imgPath); err == nil {
-				pdf.Image(imgPath, 10, pdf.GetY(), 180, 0, false, "", 0, "")
+				pdf.Image(imgPath, 10, pdf.GetY(), 180, 100, false, "", 0, "")
+				pdf.Ln(105) // Move cursor below image
+			} else {
+				fmt.Printf("Image not found: %s, adding empty box\n", imgPath)
+				// Draw empty box if image is missing
+				pdf.Rect(10, pdf.GetY(), 180, 100, "D")
+				pdf.Ln(105)
 			}
+		} else {
+			// Draw empty box for missing images
+			pdf.Rect(10, pdf.GetY(), 180, 100, "D")
+			pdf.Ln(105)
 		}
-		pdf.Ln(5)
+
+		// Add text below image
 		pdf.MultiCell(0, 10, sentence.CorrectedText, "", "L", false)
 		pdf.Ln(10)
 	}
