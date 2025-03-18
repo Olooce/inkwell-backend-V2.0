@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"inkwell-backend-V2.0/utilities"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -95,6 +96,7 @@ func (s *comicService) GenerateComic(storyID uint) error {
 	comic := model.Comic{
 		UserID:      story.UserID,
 		Title:       story.Title,
+		StoryID:     story.ID,
 		Thumbnail:   generateThumbnail(sentences),
 		ViewURL:     outputPath,
 		DownloadURL: outputPath,
@@ -115,4 +117,29 @@ func generateThumbnail(sentences []model.Sentence) string {
 		}
 	}
 	return ""
+}
+
+func GenerateMissingComics(storyRepo repository.StoryRepository) {
+	stories, err := storyRepo.GetAllStoriesWithoutComics()
+	if err != nil {
+		log.Printf("Error fetching stories without comics: %v", err)
+		return
+	}
+
+	if len(stories) == 0 {
+		log.Println("All stories already have comics.")
+		return
+	}
+
+	comicService := NewComicService(storyRepo)
+
+	for _, story := range stories {
+		log.Printf("Generating comic for story ID: %d, Title: %s\n", story.ID, story.Title)
+		err := comicService.GenerateComic(story.ID)
+		if err != nil {
+			log.Printf("Failed to generate comic for story ID %d: %v", story.ID, err)
+		} else {
+			log.Printf("Successfully generated comic for story ID %d", story.ID)
+		}
+	}
 }

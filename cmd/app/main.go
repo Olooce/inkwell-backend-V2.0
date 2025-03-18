@@ -83,6 +83,8 @@ func main() {
 	// Register event listeners
 	service.InitComicEventListeners(storyRepo)
 
+	service.GenerateMissingComics(storyRepo)
+
 	// Create services.
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)

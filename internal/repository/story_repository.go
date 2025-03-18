@@ -16,6 +16,7 @@ type StoryRepository interface {
 	GetSentencesByStory(storyID uint) ([]model.Sentence, error)
 	SaveComic(comic *model.Comic) error
 	GetComicsByUser(userID uint) ([]model.Comic, error)
+	GetAllStoriesWithoutComics() ([]model.Story, error)
 }
 
 type storyRepository struct{}
@@ -79,12 +80,11 @@ func (r *storyRepository) GetComicsByUser(userID uint) ([]model.Comic, error) {
 	}
 	return comics, nil
 }
-
 func (r *storyRepository) GetAllStoriesWithoutComics() ([]model.Story, error) {
 	var stories []model.Story
-	err := r.db.Raw(`
+	err := db.GetDB().Raw(`
         SELECT * FROM stories 
-        WHERE title NOT IN (SELECT title FROM comics)
+        WHERE id NOT IN (SELECT DISTINCT story_id FROM comics)
     `).Scan(&stories).Error
 
 	if err != nil {
