@@ -27,7 +27,7 @@ func NewAnalysisService(llmClient *llm.OllamaClient) AnalysisService {
 }
 
 // InitAnalysisEventListeners subscribes to the "story_completed" event.
-func (a *analysisService) InitAnalysisEventListeners(storyRepo repository.StoryRepository) {
+func InitAnalysisEventListeners(storyRepo repository.StoryRepository, ollamaClient *llm.OllamaClient) {
 	utilities.GlobalEventBus.Subscribe("story_completed", func(data interface{}) {
 		storyID, ok := data.(uint)
 		if !ok {
@@ -43,7 +43,9 @@ func (a *analysisService) InitAnalysisEventListeners(storyRepo repository.StoryR
 			return
 		}
 
-		analysisResult, err := a.AnalyzeStory(*story)
+		analysisService := NewAnalysisService(ollamaClient)
+
+		analysisResult, err := analysisService.AnalyzeStory(*story)
 		if err != nil {
 			log.Printf("Failed to analyze story: %v", err)
 			return

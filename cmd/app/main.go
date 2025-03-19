@@ -83,6 +83,7 @@ func main() {
 
 	// Register event listeners
 	service.InitComicEventListeners(storyRepo)
+	service.InitAnalysisEventListeners(storyRepo, ollamaClient)
 
 	service.GenerateMissingComics(storyRepo)
 
