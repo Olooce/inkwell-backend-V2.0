@@ -6,6 +6,7 @@ import (
 	"inkwell-backend-V2.0/internal/model"
 )
 
+// StoryRepository defines repository methods for stories.
 type StoryRepository interface {
 	GetStories() ([]model.Story, error)
 	GetStoryByID(storyID uint) (*model.Story, error)
@@ -24,6 +25,7 @@ type storyRepository struct {
 	executor *db.QueryExecutor
 }
 
+// NewStoryRepository creates a new instance of StoryRepository.
 func NewStoryRepository() StoryRepository {
 	return &storyRepository{
 		executor: db.NewQueryExecutor(db.GetDB()),
@@ -48,7 +50,7 @@ func (r *storyRepository) GetStoryByID(storyID uint) (*model.Story, error) {
 }
 
 func (r *storyRepository) CreateStory(story *model.Story) error {
-	// Capture returned id if needed
+	// Use the correct model fields: Title, Content, UserID, and Status.
 	_, err := r.executor.Insert("stories", map[string]interface{}{
 		"title":   story.Title,
 		"content": story.Content,
@@ -59,7 +61,7 @@ func (r *storyRepository) CreateStory(story *model.Story) error {
 }
 
 func (r *storyRepository) CreateSentence(sentence *model.Sentence) error {
-	// Use OriginalText (or CorrectedText) as per your design
+	// Use fields as defined in the Sentence model.
 	_, err := r.executor.Insert("sentences", map[string]interface{}{
 		"story_id":       sentence.StoryID,
 		"original_text":  sentence.OriginalText,

@@ -315,6 +315,7 @@ func main() {
 
 			story, err := storyService.CreateStory(uid, req.Title)
 			if err != nil {
+				log.Println(err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create story"})
 				return
 			}
