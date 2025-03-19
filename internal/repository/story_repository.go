@@ -21,12 +21,12 @@ type StoryRepository interface {
 }
 
 type storyRepository struct {
-	executor *query.QueryExecutor
+	executor *db.QueryExecutor
 }
 
 func NewStoryRepository() StoryRepository {
 	return &storyRepository{
-		executor: query.NewQueryExecutor(db.GetDB()),
+		executor: db.NewQueryExecutor(db.GetDB()),
 	}
 }
 
@@ -34,7 +34,7 @@ func (r *storyRepository) GetStories() ([]model.Story, error) {
 	var stories []model.Story
 	qb := query.NewQueryBuilder().Select("*").From("stories")
 	queryStr, args := qb.Build()
-	err := r.executor.Select(queryStr, args...).Scan(&stories).Error
+	err := r.executor.RawQuery(queryStr, args...).Scan(&stories).Error
 	return stories, err
 }
 
@@ -43,28 +43,37 @@ func (r *storyRepository) GetStoryByID(storyID uint) (*model.Story, error) {
 	fp := query.NewFilterPredicate().Equal("id", storyID)
 	qb := query.NewQueryBuilder().Select("*").From("stories").Where(fp.Build())
 	queryStr, args := qb.Build()
-	err := r.executor.Select(queryStr, args...).Scan(&story).Error
+	err := r.executor.RawQuery(queryStr, args...).Scan(&story).Error
 	return &story, err
 }
 
 func (r *storyRepository) CreateStory(story *model.Story) error {
-	return r.executor.Insert("stories", map[string]interface{}{
-		"title":       story.Title,
-		"description": story.Description,
-		"user_id":     story.UserID,
-		"status":      story.Status,
-	}).Error
+	// Capture returned id if needed
+	_, err := r.executor.Insert("stories", map[string]interface{}{
+		"title":   story.Title,
+		"content": story.Content,
+		"user_id": story.UserID,
+		"status":  story.Status,
+	})
+	return err
 }
 
 func (r *storyRepository) CreateSentence(sentence *model.Sentence) error {
-	return r.executor.Insert("sentences", map[string]interface{}{
-		"story_id": sentence.StoryID,
-		"content":  sentence.Content,
-	}).Error
+	// Use OriginalText (or CorrectedText) as per your design
+	_, err := r.executor.Insert("sentences", map[string]interface{}{
+		"story_id":       sentence.StoryID,
+		"original_text":  sentence.OriginalText,
+		"corrected_text": sentence.CorrectedText,
+		"feedback":       sentence.Feedback,
+		"image_url":      sentence.ImageURL,
+	})
+	return err
 }
 
 func (r *storyRepository) CompleteStory(storyID uint) error {
-	return r.executor.Update("stories", map[string]interface{}{"id": storyID}, map[string]interface{}{"status": "completed"})
+	conditions := map[string]interface{}{"id": storyID}
+	updates := map[string]interface{}{"status": "completed"}
+	return r.executor.Update("stories", conditions, updates)
 }
 
 func (r *storyRepository) GetCurrentStoryByUser(userID uint) (*model.Story, error) {
@@ -72,7 +81,7 @@ func (r *storyRepository) GetCurrentStoryByUser(userID uint) (*model.Story, erro
 	fp := query.NewFilterPredicate().Equal("user_id", userID).And().Equal("status", "in_progress")
 	qb := query.NewQueryBuilder().Select("*").From("stories").Where(fp.Build())
 	queryStr, args := qb.Build()
-	err := r.executor.Select(queryStr, args...).Scan(&story).Error
+	err := r.executor.RawQuery(queryStr, args...).Scan(&story).Error
 	return &story, err
 }
 
@@ -81,7 +90,7 @@ func (r *storyRepository) GetSentenceCount(storyID uint) (int, error) {
 	fp := query.NewFilterPredicate().Equal("story_id", storyID)
 	qb := query.NewQueryBuilder().Select("COUNT(*)").From("sentences").Where(fp.Build())
 	queryStr, args := qb.Build()
-	err := r.executor.Select(queryStr, args...).Scan(&count).Error
+	err := r.executor.RawQuery(queryStr, args...).Scan(&count).Error
 	return count, err
 }
 
@@ -90,16 +99,21 @@ func (r *storyRepository) GetSentencesByStory(storyID uint) ([]model.Sentence, e
 	fp := query.NewFilterPredicate().Equal("story_id", storyID)
 	qb := query.NewQueryBuilder().Select("*").From("sentences").Where(fp.Build())
 	queryStr, args := qb.Build()
-	err := r.executor.Select(queryStr, args...).Scan(&sentences).Error
+	err := r.executor.RawQuery(queryStr, args...).Scan(&sentences).Error
 	return sentences, err
 }
 
 func (r *storyRepository) SaveComic(comic *model.Comic) error {
-	return r.executor.Insert("comics", map[string]interface{}{
-		"story_id": comic.StoryID,
-		"user_id":  comic.UserID,
-		"image":    comic.Image,
-	}).Error
+	_, err := r.executor.Insert("comics", map[string]interface{}{
+		"story_id":     comic.StoryID,
+		"user_id":      comic.UserID,
+		"title":        comic.Title,
+		"thumbnail":    comic.Thumbnail,
+		"view_url":     comic.ViewURL,
+		"download_url": comic.DownloadURL,
+		"done_on":      comic.DoneOn,
+	})
+	return err
 }
 
 func (r *storyRepository) GetComicsByUser(userID uint) ([]model.Comic, error) {
@@ -107,17 +121,15 @@ func (r *storyRepository) GetComicsByUser(userID uint) ([]model.Comic, error) {
 	fp := query.NewFilterPredicate().Equal("user_id", userID)
 	qb := query.NewQueryBuilder().Select("*").From("comics").Where(fp.Build())
 	queryStr, args := qb.Build()
-	err := r.executor.Select(queryStr, args...).Scan(&comics).Error
+	err := r.executor.RawQuery(queryStr, args...).Scan(&comics).Error
 	return comics, err
 }
 
 func (r *storyRepository) GetAllStoriesWithoutComics() ([]model.Story, error) {
 	var stories []model.Story
-	qb := query.NewQueryBuilder().RawQuery(`
+	err := r.executor.RawQuery(`
         SELECT * FROM stories 
         WHERE id NOT IN (SELECT DISTINCT story_id FROM comics)
-    `)
-	queryStr, args := qb.Build()
-	err := r.executor.Select(queryStr, args...).Scan(&stories).Error
+    `).Scan(&stories).Error
 	return stories, err
 }

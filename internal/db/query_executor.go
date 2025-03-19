@@ -101,6 +101,6 @@ func (qe *QueryExecutor) Transaction(txFunc func(tx *gorm.DB) error) error {
 }
 
 // RawExec executes a raw SQL command.
-func (qe *QueryExecutor) RawExec(query string, args ...interface{}) error {
-	return qe.DB.Exec(query, args...).Error
+func (qe *QueryExecutor) RawQuery(query string, args ...interface{}) *gorm.DB {
+	return qe.DB.Raw(query, args...)
 }
