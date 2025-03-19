@@ -179,3 +179,22 @@ func (o *OllamaClient) CorrectSentence(sentence string) (string, string, error) 
 	}
 	return correctedText, feedback, nil
 }
+
+type AnalysisResponse struct {
+	Analysis string   `json:"analysis"`
+	Tips     []string `json:"tips"`
+}
+
+// AnalyzeText sends the prompt to Ollama and attempts to parse the response as JSON.
+func (o *OllamaClient) AnalyzeText(prompt string) (*AnalysisResponse, error) {
+	response, err := o.callOllama(prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	var analysisResp AnalysisResponse
+	if err := json.Unmarshal([]byte(response), &analysisResp); err != nil {
+		return nil, fmt.Errorf("failed to parse analysis response: %w", err)
+	}
+	return &analysisResp, nil
+}
