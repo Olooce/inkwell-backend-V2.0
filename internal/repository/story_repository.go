@@ -20,6 +20,7 @@ type StoryRepository interface {
 	GetComicsByUser(userID uint) ([]model.Comic, error)
 	GetAllStoriesWithoutComics() ([]model.Story, error)
 	UpdateStoryAnalysis(storyID uint, analysis string, tips []string) error
+	GetCompletedStoriesWithAnalysis(userID uint) ([]model.Story, error)
 }
 
 type storyRepository struct{}
@@ -115,4 +116,12 @@ func (r *storyRepository) UpdateStoryAnalysis(storyID uint, analysis string, tip
 			"analysis": analysis,
 			"tips":     tipsStr,
 		}).Error
+}
+
+func (r *storyRepository) GetCompletedStoriesWithAnalysis(userID uint) ([]model.Story, error) {
+	var stories []model.Story
+	err := db.GetDB().
+		Where("user_id = ? AND status = ? AND analysis IS NOT NULL", userID, "completed").
+		Find(&stories).Error
+	return stories, err
 }

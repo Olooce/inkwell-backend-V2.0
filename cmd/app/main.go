@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -92,8 +93,7 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
-	analysisService := service.NewAnalysisService(ollamaClient)
-
+	
 	// Initialize Gin router.
 	r := gin.Default()
 
@@ -432,21 +432,25 @@ func main() {
 				return
 			}
 
-			// Get the current in-progress story for the user.
-			story, err := storyRepo.GetCurrentStoryByUser(uid)
+			// Fetch all completed stories with analysis for the user
+			stories, err := storyRepo.GetCompletedStoriesWithAnalysis(uid)
 			if err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "No active story found"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch completed stories"})
 				return
 			}
 
-			// Use the analysis service to analyze the story.
-			analysis, err := analysisService.AnalyzeStory(*story)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to analyze story"})
-				return
+			// Transform data into a JSON-friendly response format
+			var analyzedStories []map[string]interface{}
+			for _, story := range stories {
+				analyzedStories = append(analyzedStories, map[string]interface{}{
+					"story_id": story.ID,
+					"title":    story.Title,
+					"analysis": story.Analysis,
+					"tips":     strings.Split(story.Tips, "\n"),
+				})
 			}
 
-			c.JSON(http.StatusOK, analysis)
+			c.JSON(http.StatusOK, gin.H{"stories": analyzedStories})
 		})
 	}
 
