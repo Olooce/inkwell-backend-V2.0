@@ -1,7 +1,6 @@
 package db
 
 import (
-	"errors"
 	"gorm.io/gorm"
 )
 
@@ -25,17 +24,10 @@ func (qe *QueryExecutor) IsFieldInTable(tableName, fieldName string) (bool, erro
 	return exists, nil
 }
 
-// Insert executes an insert query and returns the last inserted ID.
-func (qe *QueryExecutor) Insert(table string, data map[string]interface{}) (uint, error) {
+// Insert executes an insert query
+func (qe *QueryExecutor) Insert(table string, data map[string]interface{}) error {
 	result := qe.DB.Table(table).Create(&data)
-	if result.Error != nil {
-		return 0, result.Error
-	}
-	id, ok := data["id"].(uint)
-	if !ok {
-		return 0, errors.New("failed to retrieve last insert ID")
-	}
-	return id, nil
+	return result.Error
 }
 
 // Select executes a raw select query and returns the results.

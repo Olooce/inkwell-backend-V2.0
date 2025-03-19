@@ -50,19 +50,18 @@ func (r *storyRepository) GetStoryByID(storyID uint) (*model.Story, error) {
 }
 
 func (r *storyRepository) CreateStory(story *model.Story) error {
-	// Use the correct model fields: Title, Content, UserID, and Status.
-	_, err := r.executor.Insert("stories", map[string]interface{}{
+	err := r.executor.Insert("stories", map[string]interface{}{
 		"title":   story.Title,
 		"content": story.Content,
 		"user_id": story.UserID,
 		"status":  story.Status,
+		"id":      story.ID,
 	})
 	return err
 }
 
 func (r *storyRepository) CreateSentence(sentence *model.Sentence) error {
-	// Use fields as defined in the Sentence model.
-	_, err := r.executor.Insert("sentences", map[string]interface{}{
+	err := r.executor.Insert("sentences", map[string]interface{}{
 		"story_id":       sentence.StoryID,
 		"original_text":  sentence.OriginalText,
 		"corrected_text": sentence.CorrectedText,
@@ -106,7 +105,7 @@ func (r *storyRepository) GetSentencesByStory(storyID uint) ([]model.Sentence, e
 }
 
 func (r *storyRepository) SaveComic(comic *model.Comic) error {
-	_, err := r.executor.Insert("comics", map[string]interface{}{
+	err := r.executor.Insert("comics", map[string]interface{}{
 		"story_id":     comic.StoryID,
 		"user_id":      comic.UserID,
 		"title":        comic.Title,
