@@ -16,7 +16,7 @@ type StoryService interface {
 	AddSentence(storyID uint, sentence string) (*model.Sentence, error)
 	CompleteStory(storyID uint) error
 	GetProgress(userID uint) (map[string]interface{}, error)
-	GetComicsByUser(userID uint) ([]model.Comic, error)
+	GetComicsByUser(userID uint) ([]ComicResponse, error)
 }
 
 type storyService struct {
@@ -150,10 +150,36 @@ func (s *storyService) GetProgress(userID uint) (map[string]interface{}, error) 
 	return progress, nil
 }
 
-func (s *storyService) GetComicsByUser(userID uint) ([]model.Comic, error) {
+type ComicResponse struct {
+	ID          uint   `json:"id"`
+	UserID      uint   `json:"user_id"`
+	StoryID     uint   `json:"story_id"`
+	Title       string `json:"title"`
+	Thumbnail   string `json:"thumbnail"`
+	ViewURL     string `json:"view_url"`
+	DownloadURL string `json:"download_url"`
+	DoneOn      string `json:"done_on"`
+}
+
+func (s *storyService) GetComicsByUser(userID uint) ([]ComicResponse, error) {
 	comics, err := s.storyRepo.GetComicsByUser(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch comics: %w", err)
 	}
-	return comics, nil
+
+	var response []ComicResponse
+	for _, comic := range comics {
+		response = append(response, ComicResponse{
+			ID:          comic.ID,
+			UserID:      comic.UserID,
+			StoryID:     comic.StoryID,
+			Title:       comic.Title,
+			Thumbnail:   comic.Thumbnail,
+			ViewURL:     comic.ViewURL,
+			DownloadURL: comic.DownloadURL,
+			DoneOn:      comic.DoneOn.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	return response, nil
 }
