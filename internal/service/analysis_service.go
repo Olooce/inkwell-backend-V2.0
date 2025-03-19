@@ -87,10 +87,6 @@ Return your response as JSON in the following format:
 Story Content:
 %s`, story.Content)
 
-	//// (Optionally add a context with timeout)
-	//ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	//defer cancel()
-
 	analysisResp, err := a.llmClient.AnalyzeText(prompt)
 	if err != nil {
 		return nil, err
