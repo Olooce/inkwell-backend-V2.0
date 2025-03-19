@@ -62,6 +62,8 @@ type Story struct {
 	UserID    uint      `json:"user_id"`
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
+	Analysis  string    `json:"analysis,omitempty"`
+	Tips      string    `json:"tips,omitempty"`
 	Status    string    `json:"status" gorm:"default:'in_progress'"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
+	"inkwell-backend-V2.0/internal/repository"
+	"inkwell-backend-V2.0/utilities"
+	"log"
 	"time"
 )
 
@@ -21,6 +24,52 @@ func NewAnalysisService(llmClient *llm.OllamaClient) AnalysisService {
 	return &analysisService{
 		llmClient: llmClient,
 	}
+}
+
+// InitAnalysisEventListeners subscribes to the "story_completed" event.
+func (a *analysisService) InitAnalysisEventListeners(storyRepo repository.StoryRepository) {
+	utilities.GlobalEventBus.Subscribe("story_completed", func(data interface{}) {
+		storyID, ok := data.(uint)
+		if !ok {
+			fmt.Println("Invalid story ID received for analysis")
+			return
+		}
+
+		log.Printf("[Event] Story completed: Running analysis for story ID %d", storyID)
+
+		story, err := storyRepo.GetStoryByID(storyID)
+		if err != nil {
+			log.Printf("Failed to fetch story: %v", err)
+			return
+		}
+
+		analysisResult, err := a.AnalyzeStory(*story)
+		if err != nil {
+			log.Printf("Failed to analyze story: %v", err)
+			return
+		}
+
+		// Extract analysis and tips from the result.
+		analysisText, ok := analysisResult["analysis"].(string)
+		if !ok {
+			log.Println("Analysis text missing or not a string")
+			return
+		}
+		tips, ok := analysisResult["tips"].([]string)
+		if !ok {
+			log.Println("Tips missing or not of type []string")
+			return
+		}
+
+		// Update the story with the analysis.
+		err = storyRepo.UpdateStoryAnalysis(storyID, analysisText, tips)
+		if err != nil {
+			log.Printf("Failed to update story analysis: %v", err)
+			return
+		}
+
+		log.Printf("Successfully updated story with analysis for story ID %d", storyID)
+	})
 }
 
 // AnalyzeStory generates a prompt from the story content, calls the LLM,

@@ -4,6 +4,7 @@ import (
 	"gorm.io/gorm"
 	"inkwell-backend-V2.0/internal/db"
 	"inkwell-backend-V2.0/internal/model"
+	"strings"
 )
 
 type StoryRepository interface {
@@ -18,6 +19,7 @@ type StoryRepository interface {
 	SaveComic(comic *model.Comic) error
 	GetComicsByUser(userID uint) ([]model.Comic, error)
 	GetAllStoriesWithoutComics() ([]model.Story, error)
+	UpdateStoryAnalysis(storyID uint, analysis string, tips []string) error
 }
 
 type storyRepository struct{}
@@ -103,4 +105,14 @@ func (r *storyRepository) GetAllStoriesWithoutComics() ([]model.Story, error) {
 	}
 
 	return stories, nil
+}
+
+func (r *storyRepository) UpdateStoryAnalysis(storyID uint, analysis string, tips []string) error {
+	tipsStr := strings.Join(tips, "\n")
+	return db.GetDB().Model(&model.Story{}).
+		Where("id = ?", storyID).
+		Updates(map[string]interface{}{
+			"analysis": analysis,
+			"tips":     tipsStr,
+		}).Error
 }

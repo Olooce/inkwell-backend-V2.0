@@ -325,8 +325,8 @@ func main() {
 			// { story_id, guidance, max_sentences }
 			c.JSON(http.StatusCreated, gin.H{
 				"story_id":      story.ID,
-				"guidance":      "Begin with an exciting sentence!", // example guidance
-				"max_sentences": 5,                                  // default maximum sentence count
+				"guidance":      "Begin with an exciting sentence!",
+				"max_sentences": 5,
 			})
 		})
 
