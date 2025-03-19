@@ -108,3 +108,8 @@ func printConnectionPoolStats(db *sql.DB, cfg *config.APIConfig) {
 	fmt.Printf(" Max Lifetime Closed           : %d\n", stats.MaxLifetimeClosed)
 	fmt.Println("\n------------------------------------------------")
 }
+
+// GetDB returns the current database connection.
+func GetDB() *gorm.DB {
+	return Conn
+}
