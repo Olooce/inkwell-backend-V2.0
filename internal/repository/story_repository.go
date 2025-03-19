@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"gorm.io/gorm"
 	"inkwell-backend-V2.0/internal/db"
 	"inkwell-backend-V2.0/internal/model"
 )
@@ -42,7 +43,17 @@ func (r *storyRepository) CreateStory(story *model.Story) error {
 }
 
 func (r *storyRepository) CreateSentence(sentence *model.Sentence) error {
-	return db.GetDB().Create(sentence).Error
+	// Create the sentence record.
+	err := db.GetDB().Create(sentence).Error
+	if err != nil {
+		return err
+	}
+
+	// Append the new sentence's text to the story's content
+	updateErr := db.GetDB().Model(&model.Story{}).
+		Where("id = ?", sentence.StoryID).
+		Update("content", gorm.Expr("content || ' ' || ?", sentence.OriginalText)).Error
+	return updateErr
 }
 
 func (r *storyRepository) CompleteStory(storyID uint) error {

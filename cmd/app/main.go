@@ -91,6 +91,7 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
+	analysisService := service.NewAnalysisService(ollamaClient)
 
 	// Initialize Gin router.
 	r := gin.Default()
@@ -413,6 +414,38 @@ func main() {
 			}
 
 			c.JSON(http.StatusOK, comics)
+		})
+	}
+
+	analysisRoutes := r.Group("/writing-skills/analysis")
+	{
+		analysisRoutes.GET("/", func(c *gin.Context) {
+			userIDVal, exists := c.Get("user_id")
+			if !exists {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+				return
+			}
+			uid, ok := userIDVal.(uint)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
+				return
+			}
+
+			// Get the current in-progress story for the user.
+			story, err := storyRepo.GetCurrentStoryByUser(uid)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "No active story found"})
+				return
+			}
+
+			// Use the analysis service to analyze the story.
+			analysis, err := analysisService.AnalyzeStory(*story)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to analyze story"})
+				return
+			}
+
+			c.JSON(http.StatusOK, analysis)
 		})
 	}
 
