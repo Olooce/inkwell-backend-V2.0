@@ -74,15 +74,16 @@ func InitAnalysisEventListeners(storyRepo repository.StoryRepository, ollamaClie
 	})
 }
 
-// AnalyzeStory generates a prompt from the story content, calls the LLM,
-// and returns a structured analysis with writing tips.
+// / AnalyzeStory generates a prompt from the story content, calls the LLM,
+// and returns a structured analysis with writing tips and a performance score.
 func (a *analysisService) AnalyzeStory(story model.Story) (map[string]interface{}, error) {
 	prompt := fmt.Sprintf(
 		`Please analyze the following story for structure, style, and common errors.
 Return your response as JSON in the following format:
 {
 	"analysis": "Your analysis text",
-	"tips": ["Tip 1", "Tip 2", ...]
+	"tips": ["Tip 1", "Tip 2", ...],
+	"performance_score": 85
 }
 Story Content:
 %s`, story.Content)
@@ -93,9 +94,10 @@ Story Content:
 	}
 
 	result := map[string]interface{}{
-		"analysis":  analysisResp.Analysis,
-		"tips":      analysisResp.Tips,
-		"timestamp": time.Now(),
+		"analysis":          analysisResp.Analysis,
+		"tips":              analysisResp.Tips,
+		"performance_score": analysisResp.PerformanceScore,
+		"timestamp":         time.Now(),
 	}
 	return result, nil
 }

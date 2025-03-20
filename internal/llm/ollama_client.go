@@ -181,8 +181,9 @@ func (o *OllamaClient) CorrectSentence(sentence string) (string, string, error) 
 }
 
 type AnalysisResponse struct {
-	Analysis string   `json:"analysis"`
-	Tips     []string `json:"tips"`
+	Analysis         string   `json:"analysis"`
+	Tips             []string `json:"tips"`
+	PerformanceScore int      `json:"performance_score"`
 }
 
 // AnalyzeText sends the prompt to Ollama and attempts to parse the response as JSON.

@@ -58,15 +58,16 @@ type AnswerResponse struct {
 }
 
 type Story struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	UserID    uint      `json:"user_id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Analysis  string    `json:"analysis,omitempty"`
-	Tips      string    `json:"tips,omitempty"`
-	Status    string    `json:"status" gorm:"default:'in_progress'"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID               uint      `json:"id" gorm:"primaryKey"`
+	UserID           uint      `json:"user_id"`
+	Title            string    `json:"title"`
+	Content          string    `json:"content"`
+	PerformanceScore int       `json:"performance_score" gorm:"default:0"`
+	Analysis         string    `json:"analysis,omitempty"`
+	Tips             string    `json:"tips,omitempty"`
+	Status           string    `json:"status" gorm:"default:'in_progress'"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type Sentence struct {
