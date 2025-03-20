@@ -49,7 +49,7 @@ func main() {
 	//if err != nil {
 	//	log.Fatalf("Hugging Face authentication failed: %v", err)
 	//}
-	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.THIRD_PARTY.HFToken}
+	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
 
 	//imagePath, err := diffussionClient.GenerateImage("A house")
 	//if err != nil {
@@ -631,7 +631,12 @@ func preloadModel(modelName string) {
 	if err != nil {
 		log.Fatalf("Failed to preload model %s: %v", modelName, err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	if resp.StatusCode == http.StatusOK {
 		log.Printf("Model '%s' preloaded successfully.", modelName)

@@ -20,7 +20,7 @@ type APIConfig struct {
 	Authentication AuthenticationConfig `xml:"AUTHENTICATION"`
 	Pagination     PaginationConfig     `xml:"PAGINATION"`
 	DB             DBConfig             `xml:"DB"`
-	THIRD_PARTY    ThirdPartyConfig     `xml:"THIRD_PARTY"`
+	ThirdParty     ThirdPartyConfig     `xml:"THIRD_PARTY"`
 }
 
 // ContextConfig holds basic server settings.

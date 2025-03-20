@@ -69,7 +69,10 @@ func (s *comicService) GenerateComic(storyID uint) error {
 
 	if _, err := os.Stat("working/comics"); os.IsNotExist(err) {
 		log.Println("Creating missing directory: working/comics")
-		os.MkdirAll("working/comics", os.ModePerm)
+		err := os.MkdirAll("working/comics", os.ModePerm)
+		if err != nil {
+			return err
+		}
 	}
 
 	pdf := gofpdf.New("P", "mm", "A4", "")
