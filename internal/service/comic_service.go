@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"inkwell-backend-V2.0/utilities"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -46,7 +45,7 @@ func InitComicEventListeners(storyRepo repository.StoryRepository) {
 }
 
 func encodeImageToBase64(imgPath string) (string, error) {
-	imgData, err := ioutil.ReadFile(imgPath)
+	imgData, err := os.ReadFile(imgPath)
 	if err != nil {
 		return "", err
 	}
