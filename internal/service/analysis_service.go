@@ -64,7 +64,7 @@ func InitAnalysisEventListeners(storyRepo repository.StoryRepository, ollamaClie
 		}
 		perfScore, ok := analysisResult["performance_score"].(int)
 		if !ok {
-			// If the LLM returns a number as float64, you might need to convert:
+			// If the LLM returns a number as float64, convert it
 			if scoreFloat, ok := analysisResult["performance_score"].(float64); ok {
 				perfScore = int(scoreFloat)
 			} else {
