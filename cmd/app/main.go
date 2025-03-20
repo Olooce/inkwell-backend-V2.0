@@ -93,7 +93,7 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
 	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
-	
+
 	// Initialize Gin router.
 	r := gin.Default()
 
@@ -451,6 +451,51 @@ func main() {
 			}
 
 			c.JSON(http.StatusOK, gin.H{"stories": analyzedStories})
+		})
+
+		// GET /writing-skills/analysis/overview
+		analysisRoutes.GET("/overview", func(c *gin.Context) {
+			initialProgress := map[string]interface{}{
+				"level": "BEGINNER",
+				"scores": map[string]float64{
+					"masked":           85.0,
+					"error_correction": 90.0,
+				},
+			}
+			currentProgress := map[string]interface{}{
+				"improvement": 15.0,
+				"stats": map[string]interface{}{
+					"total_stories":   5,
+					"total_sentences": 50,
+					"accuracy":        92.5,
+				},
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"initial_progress": initialProgress,
+				"current_progress": currentProgress,
+			})
+		})
+
+		// GET /writing-skills/analysis/download_report/?type=initial or type=current
+		analysisRoutes.GET("/download_report", func(c *gin.Context) {
+			reportType := c.Query("type")
+			var filename string
+
+			// Determine the file name based on the report type.
+			if reportType == "initial" {
+				filename = "initial_progress_report.pdf"
+			} else if reportType == "current" {
+				filename = "progress_report.pdf"
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report type"})
+				return
+			}
+
+			pdfContent := []byte("%PDF-1.4 dummy pdf content")
+
+			// Set headers so the browser downloads the file.
+			c.Header("Content-Disposition", "attachment; filename="+filename)
+			c.Data(http.StatusOK, "application/pdf", pdfContent)
 		})
 	}
 
