@@ -455,24 +455,28 @@ func main() {
 
 		// GET /writing-skills/analysis/overview
 		analysisRoutes.GET("/overview", func(c *gin.Context) {
-			initialProgress := map[string]interface{}{
-				"level": "BEGINNER",
-				"scores": map[string]float64{
-					"masked":           85.0,
-					"error_correction": 90.0,
-				},
+			// Retrieve the authenticated user's ID from context.
+			userIDVal, exists := c.Get("user_id")
+			if !exists {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+				return
 			}
-			currentProgress := map[string]interface{}{
-				"improvement": 15.0,
-				"stats": map[string]interface{}{
-					"total_stories":   5,
-					"total_sentences": 50,
-					"accuracy":        92.5,
-				},
+			uid, ok := userIDVal.(uint)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
+				return
 			}
+
+			// Generate progress data from the database.
+			progressData, err := service.GenerateProgressData(db.GetDB(), uid)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
 			c.JSON(http.StatusOK, gin.H{
-				"initial_progress": initialProgress,
-				"current_progress": currentProgress,
+				"initial_progress": progressData.InitialProgress,
+				"current_progress": progressData.CurrentProgress,
 			})
 		})
 

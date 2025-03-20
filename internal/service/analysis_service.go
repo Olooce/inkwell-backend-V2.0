@@ -51,7 +51,7 @@ func InitAnalysisEventListeners(storyRepo repository.StoryRepository, ollamaClie
 			return
 		}
 
-		// Extract analysis and tips from the result.
+		// Extract analysis, tips, and performance score.
 		analysisText, ok := analysisResult["analysis"].(string)
 		if !ok {
 			log.Println("Analysis text missing or not a string")
@@ -62,9 +62,19 @@ func InitAnalysisEventListeners(storyRepo repository.StoryRepository, ollamaClie
 			log.Println("Tips missing or not of type []string")
 			return
 		}
+		perfScore, ok := analysisResult["performance_score"].(int)
+		if !ok {
+			// If the LLM returns a number as float64, you might need to convert:
+			if scoreFloat, ok := analysisResult["performance_score"].(float64); ok {
+				perfScore = int(scoreFloat)
+			} else {
+				log.Println("Performance score missing or invalid")
+				return
+			}
+		}
 
 		// Update the story with the analysis.
-		err = storyRepo.UpdateStoryAnalysis(storyID, analysisText, tips)
+		err = storyRepo.UpdateStoryAnalysis(storyID, analysisText, tips, perfScore)
 		if err != nil {
 			log.Printf("Failed to update story analysis: %v", err)
 			return

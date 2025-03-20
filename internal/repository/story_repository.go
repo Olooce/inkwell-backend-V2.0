@@ -19,7 +19,7 @@ type StoryRepository interface {
 	SaveComic(comic *model.Comic) error
 	GetComicsByUser(userID uint) ([]model.Comic, error)
 	GetAllStoriesWithoutComics() ([]model.Story, error)
-	UpdateStoryAnalysis(storyID uint, analysis string, tips []string) error
+	UpdateStoryAnalysis(storyID uint, analysis string, tips []string, perfScore int) error
 	GetCompletedStoriesWithAnalysis(userID uint) ([]model.Story, error)
 }
 
@@ -108,13 +108,14 @@ func (r *storyRepository) GetAllStoriesWithoutComics() ([]model.Story, error) {
 	return stories, nil
 }
 
-func (r *storyRepository) UpdateStoryAnalysis(storyID uint, analysis string, tips []string) error {
+func (r *storyRepository) UpdateStoryAnalysis(storyID uint, analysis string, tips []string, perfScore int) error {
 	tipsStr := strings.Join(tips, "\n")
 	return db.GetDB().Model(&model.Story{}).
 		Where("id = ?", storyID).
 		Updates(map[string]interface{}{
-			"analysis": analysis,
-			"tips":     tipsStr,
+			"analysis":          analysis,
+			"tips":              tipsStr,
+			"performance_score": perfScore,
 		}).Error
 }
 
