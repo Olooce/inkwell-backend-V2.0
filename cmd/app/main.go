@@ -86,7 +86,17 @@ func main() {
 	service.InitComicEventListeners(storyRepo)
 	service.InitAnalysisEventListeners(storyRepo, ollamaClient)
 
-	service.GenerateMissingComics(storyRepo)
+	// Fire-and-forget: run GenerateMissingComics in the background.
+	go func() {
+		service.GenerateMissingComics(storyRepo)
+	}()
+
+	// Fire-and-forget: run CreateAnalysisForAllStoriesWithoutIt in the background.
+	go func() {
+		if err := service.CreateAnalysisForAllStoriesWithoutIt(storyRepo, ollamaClient); err != nil {
+			log.Printf("Error creating analysis for stories: %v", err)
+		}
+	}()
 
 	// Create services.
 	authService := service.NewAuthService(userRepo)

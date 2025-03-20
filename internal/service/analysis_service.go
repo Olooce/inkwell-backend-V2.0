@@ -111,3 +111,59 @@ Story Content:
 	}
 	return result, nil
 }
+
+// CreateAnalysisForAllStoriesWithoutIt fetches all stories that lack analysis,
+// runs analysis via the LLM, and updates the story with analysis, tips, and performance score.
+func CreateAnalysisForAllStoriesWithoutIt(storyRepo repository.StoryRepository, ollamaClient *llm.OllamaClient) error {
+	// Instantiate the analysis service.
+	analysisSvc := NewAnalysisService(ollamaClient)
+
+	// Retrieve stories that do not have analysis yet.
+	stories, err := storyRepo.GetStoriesWithoutAnalysis()
+	if err != nil {
+		return err
+	}
+
+	// Iterate over each story and generate analysis.
+	for _, story := range stories {
+		log.Printf("Analyzing story ID %d", story.ID)
+
+		analysisResult, err := analysisSvc.AnalyzeStory(story)
+		if err != nil {
+			log.Printf("Failed to analyze story ID %d: %v", story.ID, err)
+			continue
+		}
+
+		// Extract the analysis, tips, and performance score.
+		analysisText, ok := analysisResult["analysis"].(string)
+		if !ok {
+			log.Printf("Analysis text missing or invalid for story ID %d", story.ID)
+			continue
+		}
+
+		tips, ok := analysisResult["tips"].([]string)
+		if !ok {
+			log.Printf("Tips missing or invalid for story ID %d", story.ID)
+			continue
+		}
+
+		perfScore, ok := analysisResult["performance_score"].(int)
+		if !ok {
+			// If the LLM returned a float, convert it to int.
+			if scoreFloat, ok := analysisResult["performance_score"].(float64); ok {
+				perfScore = int(scoreFloat)
+			} else {
+				log.Printf("Performance score missing or invalid for story ID %d", story.ID)
+				continue
+			}
+		}
+
+		// Update the story with the analysis data.
+		if err := storyRepo.UpdateStoryAnalysis(story.ID, analysisText, tips, perfScore); err != nil {
+			log.Printf("Failed to update analysis for story ID %d: %v", story.ID, err)
+			continue
+		}
+		log.Printf("Successfully updated analysis for story ID %d", story.ID)
+	}
+	return nil
+}
