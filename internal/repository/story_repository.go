@@ -130,6 +130,6 @@ func (r *storyRepository) GetCompletedStoriesWithAnalysis(userID uint) ([]model.
 
 func (r *storyRepository) GetStoriesWithoutAnalysis() ([]model.Story, error) {
 	var stories []model.Story
-	err := db.GetDB().Where("analysis = ''").Find(&stories).Error
+	err := db.GetDB().Where("analysis = '' OR analysis = null OR performance_score = 0").Find(&stories).Error
 	return stories, err
 }
