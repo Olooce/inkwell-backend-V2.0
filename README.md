@@ -1,5 +1,3 @@
---
-
 # Inkwell Backend
 
 ## Overview
@@ -155,7 +153,7 @@ Inkwell Backend is the server-side component of the Inkwell project. It handles 
       "id": 1,
       "name": "John Doe",
       "email": "john@example.com",
-      "": ''
+      "": ""
     }
   ]
   ```
