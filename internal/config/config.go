@@ -33,7 +33,8 @@ type ContextConfig struct {
 }
 
 type ThirdPartyConfig struct {
-	HFToken string `xml:"HF_TOKEN"`
+	HFToken    string `xml:"HF_TOKEN"`
+	OllamaHost string `xml:"OLLAMA_HOST"`
 }
 
 // AuthenticationConfig holds authentication settings.

@@ -63,8 +63,13 @@ func main() {
 	// Wait until Ollama is responsive before proceeding
 	waitForOllama()
 
+	ollamaHost := cfg.ThirdParty.OllamaHost
+	if ollamaHost == "" {
+		ollamaHost = "http://localhost:11434" // Default if not set
+	}
+
 	// Initialize Ollama Client
-	ollamaClient = llm.NewOllamaClient("http://localhost:11434/api/generate")
+	ollamaClient = llm.NewOllamaClient(ollamaHost + "/api/generate")
 
 	// Preload the model
 	preloadModel("mistral")
