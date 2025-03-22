@@ -1,6 +1,10 @@
+<div align="center">
+
 # Inkwell Backend
 
 ![image](https://github.com/user-attachments/assets/24b39c64-7bcf-4b6c-a8f6-9b8b76ff0988)
+
+</div>
 
 
 ## Overview
