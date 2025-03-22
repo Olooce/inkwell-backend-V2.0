@@ -25,11 +25,18 @@ type APIConfig struct {
 
 // ContextConfig holds basic server settings.
 type ContextConfig struct {
-	Port            int    `xml:"PORT"`
-	Host            string `xml:"HOST"`
-	Path            string `xml:"PATH"`
-	TimeZone        string `xml:"TIME_ZONE"`
-	EnableBasicAuth bool   `xml:"ENABLE_BASIC_AUTH"`
+	Port            int                  `xml:"PORT"`
+	Host            string               `xml:"HOST"`
+	Path            string               `xml:"PATH"`
+	TimeZone        string               `xml:"TIME_ZONE"`
+	EnableBasicAuth bool                 `xml:"ENABLE_BASIC_AUTH"`
+	Mode            string               `xml:"MODE"` // "release" or "debug"
+	TrustedProxies  TrustedProxiesConfig `xml:"TRUSTED_PROXIES"`
+}
+
+// TrustedProxiesConfig holds a list of trusted proxy IP addresses.
+type TrustedProxiesConfig struct {
+	Proxies []string `xml:"PROXY"`
 }
 
 type ThirdPartyConfig struct {

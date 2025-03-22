@@ -110,7 +110,13 @@ func main() {
 	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
 
 	// Initialize Gin router.
+	gin.SetMode(cfg.Context.Mode)
 	r := gin.Default()
+
+	// Set trusted proxies from config.
+	if err := r.SetTrustedProxies(cfg.Context.TrustedProxies.Proxies); err != nil {
+		log.Fatalf("Failed to set trusted proxies: %v", err)
+	}
 
 	// CORS configuration.
 	r.Use(utilities.CORSMiddleware())

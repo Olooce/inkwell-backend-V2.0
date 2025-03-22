@@ -6,6 +6,11 @@
         <PATH>/</PATH>
         <TIME_ZONE>Africa/Nairobi</TIME_ZONE>
         <ENABLE_BASIC_AUTH>true</ENABLE_BASIC_AUTH>
+        <MODE>release</MODE>
+        <TRUSTED_PROXIES>
+            <PROXY>127.0.0.1</PROXY>
+            <PROXY>192.168.1.100</PROXY>
+        </TRUSTED_PROXIES>
     </CONTEXT>
 
     <AUTHENTICATION MULTIPLE_SAME_USER_SESSIONS="true">
