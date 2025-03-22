@@ -58,18 +58,26 @@ func main() {
 	//	fmt.Println("Generated image at:", imagePath)
 	//}
 
-	startOllama()
-
-	// Wait until Ollama is responsive before proceeding
-	waitForOllama()
-
+	// Attempt to start Ollama
 	ollamaHost := cfg.ThirdParty.OllamaHost
 	if ollamaHost == "" {
 		ollamaHost = "http://localhost:11434" // Default if not set
 	}
 
+	if isOllamaInstalled() {
+		startOllama()
+		waitForOllama()
+	} else {
+		log.Println("Ollama not found locally. Using configured remote Ollama host:", ollamaHost)
+	}
+
 	// Initialize Ollama Client
 	ollamaClient = llm.NewOllamaClient(ollamaHost + "/api/generate")
+
+	// Preload model only if using local Ollama
+	if isOllamaInstalled() {
+		preloadModel("mistral")
+	}
 
 	// Preload the model
 	preloadModel("mistral")
@@ -665,4 +673,12 @@ func stopOllama() {
 			log.Printf("Failed to stop Ollama: %v", err)
 		}
 	}
+}
+
+func isOllamaInstalled() bool {
+	cmd := exec.Command("ollama", "--version")
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return true
 }
