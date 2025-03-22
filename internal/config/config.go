@@ -2,6 +2,8 @@ package config
 
 import (
 	"encoding/xml"
+	"fmt"
+	"github.com/joho/godotenv"
 	"io"
 	"os"
 	"sync"
@@ -92,27 +94,34 @@ type DBPoolConfig struct {
 func LoadConfig(xmlPath string) (*APIConfig, error) {
 	once.Do(func() {
 		f, err := os.Open(xmlPath)
-		if err != nil {
-			return
-		}
-		defer func(f *os.File) {
-			err := f.Close()
-			if err != nil {
+		if err == nil {
+			defer f.Close()
 
+			data, err := io.ReadAll(f)
+			if err == nil {
+				var newCfg APIConfig
+				if err := xml.Unmarshal(data, &newCfg); err == nil {
+					cfg = &newCfg
+					return
+				}
 			}
-		}(f)
+		}
 
-		data, err := io.ReadAll(f)
-		if err != nil {
+		// If XML file is not found, try loading from .env
+		fmt.Println("Config file not found, attempting to load from environment...")
+
+		_ = godotenv.Load() // Load .env file if present
+		xmlConfig := os.Getenv("CONFIG_XML")
+
+		if xmlConfig == "" {
+			fmt.Println("No XML configuration found in environment variables")
 			return
 		}
 
 		var newCfg APIConfig
-		if err := xml.Unmarshal(data, &newCfg); err != nil {
-			return
+		if err := xml.Unmarshal([]byte(xmlConfig), &newCfg); err == nil {
+			cfg = &newCfg
 		}
-
-		cfg = &newCfg
 	})
 
 	if cfg == nil {
