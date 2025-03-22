@@ -79,9 +79,6 @@ func main() {
 		preloadModel("mistral")
 	}
 
-	// Preload the model
-	preloadModel("mistral")
-
 	// Run migrations.
 	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{},
 		&model.Sentence{}, &model.Comic{})
