@@ -1,5 +1,8 @@
 # Inkwell Backend
 
+![image](https://github.com/user-attachments/assets/24b39c64-7bcf-4b6c-a8f6-9b8b76ff0988)
+
+
 ## Overview
 Inkwell Backend is the server-side component of the Inkwell project. It handles user authentication, data storage, story and comic generation, and integrates AI-powered functionality through LLM services. Built in Go, the backend uses a modular architecture that cleanly separates configuration, database management, and business logic.
 
