@@ -78,7 +78,7 @@ The front-end repository is available at: [Inkwell Frontend](https://github.com/
 1. **Clone the Repository:**
    ```bash
    git clone https://github.com/Olooce/inkwell-backend-V2.0.git
-   cd inkwell-backend
+   cd inkwell-backend-V2.0
    ```
 2. **Download Dependencies:**
    ```bash
