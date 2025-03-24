@@ -21,7 +21,11 @@ var(
 	infoLog *log.Logger
 	warnLog *log.Logger
 	errorLog *log.Logger
-	logMutex *sync.Mutex
+var (
+	infoLog   *log.Logger
+	warnLog   *log.Logger
+	errorLog  *log.Logger
+	logMutex = &sync.Mutex{}
 )
 
 func setupLogging(logDir string){
