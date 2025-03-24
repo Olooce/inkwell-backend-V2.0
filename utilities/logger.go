@@ -78,7 +78,7 @@ func Info(format string, v ...interface{}){
 	Log("INFO",format, v...)
 }
 func Warn(format string, v ...interface{}){
-	Log("WARN",format, v...)
+	Log("WARNING", format, v...)
 }
 func Error(format string, v ...interface{}){
 	Log("ERROR",format, v...)
