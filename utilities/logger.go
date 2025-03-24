@@ -1,34 +1,23 @@
 package utilities
+
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"runtime"
-	"sync"
-)
-import (
-	"fmt"
-	"io"
-	"log
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
 )
 
-var(
-	infoLog *log.Logger
-	warnLog *log.Logger
-	errorLog *log.Logger
 var (
-	infoLog   *log.Logger
-	warnLog   *log.Logger
-	errorLog  *log.Logger
+	infoLog  *log.Logger
+	warnLog  *log.Logger
+	errorLog *log.Logger
 	logMutex = &sync.Mutex{}
 )
 
-func setupLogging(logDir string){
+func setupLogging(logDir string) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)
 	}
@@ -59,21 +48,21 @@ func openLogFile(path string) *os.File {
 }
 
 func getCallerInfo() string {
-	pc,_,_, ok := runtime.Caller(2)
-	if !ok{
+	pc, _, _, ok := runtime.Caller(2)
+	if !ok {
 		return "unknown"
 	}
 	return runtime.FuncForPC(pc).Name()
 }
 
-func Log(level string, format string, v ...interface{}){
+func Log(level string, format string, v ...interface{}) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 
 	message := fmt.Sprintf(format, v...)
 	logEntry := fmt.Sprintf("%s [%s]: %s", level, getCallerInfo(), message)
 
-	switch level{
+	switch level {
 	case "INFO":
 		infoLog.Println(logEntry)
 	case "WARNING":
@@ -85,12 +74,12 @@ func Log(level string, format string, v ...interface{}){
 	}
 }
 
-func Info(format string, v ...interface{}){
-	Log("INFO",format, v...)
+func Info(format string, v ...interface{}) {
+	Log("INFO", format, v...)
 }
-func Warn(format string, v ...interface{}){
+func Warn(format string, v ...interface{}) {
 	Log("WARNING", format, v...)
 }
-func Error(format string, v ...interface{}){
-	Log("ERROR",format, v...)
+func Error(format string, v ...interface{}) {
+	Log("ERROR", format, v...)
 }
