@@ -25,25 +25,24 @@ var(
 )
 
 func setupLogging(logDir string){
-	if err := os.MkdirAll(logDir, 0755);
-	err != nil {
+	if err := os.MkdirAll(logDir, 0755); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)
 	}
 
 	infoFile := openLogFile(filepath.Join(logDir, "info.log"))
-	warnFile := openLogFile(filepath.join(logDir, "warn.log"))
+	warnFile := openLogFile(filepath.Join(logDir, "warn.log"))
 	errorFile := openLogFile(filepath.Join(logDir, "error.log"))
 
 	infoWriter := io.MultiWriter(os.Stdout, infoFile)
 	warnWriter := io.MultiWriter(os.Stdout, warnFile)
 	errorWriter := io.MultiWriter(os.Stderr, errorFile)
 
-	infoLog = log.New(infoWriter, "INFO: ",log.Ldate|Ltime)
-	warnLog = log.New(warnWriter, "WARNING: ",log.Ldate|Ltime)
-	errorLog = log.New(errorWritedar, "ERROR: ", log.Ldate|Ltime)
+	infoLog = log.New(infoWriter, "INFO: ", log.Ldate|log.Ltime)
+	warnLog = log.New(warnWriter, "WARNING: ", log.Ldate|log.Ltime)
+	errorLog = log.New(errorWriter, "ERROR: ", log.Ldate|log.Ltime)
 
 	//Override Go's  default log
-    log.SetOutput(infoWriter)
+	log.SetOutput(infoWriter)
 }
 
 func openLogFile(path string) *os.File {
