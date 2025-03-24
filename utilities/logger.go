@@ -66,18 +66,18 @@ func Log(level string, format string, v ...interface{}){
 	logMutex.Lock()
 	defer logMutex.Unlock()
 
-	message : fmt.Sprintf(format, v..)
-	logEntry := fmt.Sprint("%s [%s]":, level,getCallerInfo(), message)
+	message := fmt.Sprintf(format, v...)
+	logEntry := fmt.Sprintf("%s [%s]: %s", level, getCallerInfo(), message)
 
 	switch level{
 	case "INFO":
-		infoLog.PrintLn(logEntry)
+		infoLog.Println(logEntry)
 	case "WARNING":
-		warnLog.PrintLn(logEntry)
+		warnLog.Println(logEntry)
 	case "ERROR":
-		errorLog.PrintLn(logEntry)
+		errorLog.Println(logEntry)
 	default:
-		infoLog(logEntry)
+		infoLog.Println(logEntry)
 	}
 }
 
