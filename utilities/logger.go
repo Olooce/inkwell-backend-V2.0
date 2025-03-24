@@ -1,3 +1,4 @@
+package utilities
 import (
 	"fmt"
 	"io"
@@ -6,7 +7,6 @@ import (
 	"runtime"
 	"sync"
 )
-
 var(
 	infoLog *log.Logger
 	warnLog *log.Logger
