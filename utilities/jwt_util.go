@@ -2,40 +2,69 @@ package utilities
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"inkwell-backend-V2.0/internal/config"
 	"inkwell-backend-V2.0/internal/model"
 )
 
-// Secret keys
+// Secret keys and expiration times from config
 var (
-	accessSecret  = []byte("your-access-secret-key")
-	refreshSecret = []byte("your-refresh-secret-key")
+	accessSecret  []byte
+	refreshSecret []byte
+	accessExpiry  time.Duration
+	refreshExpiry time.Duration
 )
 
-// Token expiration times
-const (
-	AccessTokenExpiry  = time.Minute * 60
-	RefreshTokenExpiry = time.Hour * 24 * 7
-)
+// Initialize config values once
+func init() {
+	cfg := config.GetConfig()
+	if cfg == nil {
+		panic("failed to load configuration") // Ensure we don't proceed without config
+	}
+
+	// Load secrets
+	accessSecret = []byte(cfg.Authentication.SecretKeys["ACCESS"])
+	refreshSecret = []byte(cfg.Authentication.SecretKeys["REFRESH"])
+
+	// Load expiration times based on time units
+	accessExpiry = parseDuration(cfg.Authentication.SessionTimeouts["ACCESS"], cfg.Authentication.TimeUnits["ACCESS"])
+	refreshExpiry = parseDuration(cfg.Authentication.SessionTimeouts["REFRESH"], cfg.Authentication.TimeUnits["REFRESH"])
+}
+
+// parseDuration converts session timeout values based on the provided time unit
+func parseDuration(value int, unit string) time.Duration {
+	switch unit {
+	case "SECONDS":
+		return time.Duration(value) * time.Second
+	case "MINUTES":
+		return time.Duration(value) * time.Minute
+	case "HOURS":
+		return time.Duration(value) * time.Hour
+	default:
+		fmt.Printf("Warning: Unknown time unit '%s', defaulting to SECONDS\n", unit)
+		return time.Duration(value) * time.Second
+	}
+}
 
 // Claims struct
 type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	UserID   uint   json:"user_id"
+	Username string json:"username"
+	Email    string json:"email"
 	jwt.RegisteredClaims
 }
 
 // GenerateTokens creates both access and refresh tokens
 func GenerateTokens(user *model.User) (string, string, error) {
-	accessToken, err := generateToken(user, accessSecret, AccessTokenExpiry)
+	accessToken, err := generateToken(user, accessSecret, accessExpiry)
 	if err != nil {
 		return "", "", err
 	}
 
-	refreshToken, err := generateToken(user, refreshSecret, RefreshTokenExpiry)
+	refreshToken, err := generateToken(user, refreshSecret, refreshExpiry)
 	if err != nil {
 		return "", "", err
 	}
