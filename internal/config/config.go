@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/joho/godotenv"
 	"io"
+	"log"
 	"os"
 	"sync"
 )
@@ -139,7 +140,11 @@ func LoadConfig(xmlPath string) (*APIConfig, error) {
 	once.Do(func() {
 		f, err := os.Open(xmlPath)
 		if err == nil {
-			defer f.Close()
+			defer func(f *os.File) {
+				if err := f.Close(); err != nil {
+					log.Printf("failed to close file: %v", err)
+				}
+			}(f)
 
 			data, err := io.ReadAll(f)
 			if err == nil {
