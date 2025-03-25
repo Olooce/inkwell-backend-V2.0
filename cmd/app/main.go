@@ -36,11 +36,11 @@ var diffussionClient *llm.StableDiffusionWrapper
 
 func main() {
 	utilities.SetupLogging("logs")
-	utilities.Info("Fhste")
+
 	// Load XML configuration from file.
 	cfg, err := config.LoadConfig("config.xml")
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		utilities.Error("failed to load config: %v", err)
 	}
 
 	printStartUpBanner()
@@ -72,7 +72,7 @@ func main() {
 		startOllama()
 		waitForOllama()
 	} else {
-		log.Println("Ollama not found locally. Using configured remote Ollama host:", ollamaHost)
+		utilities.Warn("Ollama not found locally. Using configured remote Ollama host:", ollamaHost)
 	}
 
 	// Initialize Ollama Client
@@ -87,7 +87,7 @@ func main() {
 	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{},
 		&model.Sentence{}, &model.Comic{})
 	if err != nil {
-		log.Fatalf("AutoMigration Error: %v", err)
+		utilities.Error("AutoMigration Error: %v", err)
 		return
 	}
 
@@ -108,7 +108,7 @@ func main() {
 	// Fire-and-forget: run CreateAnalysisForAllStoriesWithoutIt in the background.
 	go func() {
 		if err := service.CreateAnalysisForAllStoriesWithoutIt(storyRepo, ollamaClient); err != nil {
-			log.Printf("Error creating analysis for stories: %v", err)
+			utilities.Error("Error creating analysis for stories: %v", err)
 		}
 	}()
 
@@ -124,7 +124,7 @@ func main() {
 
 	// Set trusted proxies from config.
 	if err := r.SetTrustedProxies(cfg.Context.TrustedProxies.Proxies); err != nil {
-		log.Fatalf("Failed to set trusted proxies: %v", err)
+		utilities.Error("Failed to set trusted proxies: %v", err)
 	}
 
 	// CORS configuration.
@@ -591,7 +591,7 @@ func startOllama() {
 	// Start Ollama
 	err := ollamaCmd.Start()
 	if err != nil {
-		log.Fatalf("Failed to start Ollama: %v", err)
+		utilities.Error("Failed to start Ollama: %v", err)
 	}
 
 	// Process standard output logs
