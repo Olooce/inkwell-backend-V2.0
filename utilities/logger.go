@@ -15,6 +15,10 @@ var (
 	warnLog  *log.Logger
 	errorLog *log.Logger
 	logMutex = &sync.Mutex{}
+
+	infoFile  *os.File
+	warnFile  *os.File
+	errorFile *os.File
 )
 
 func SetupLogging(logDir string) {
@@ -22,9 +26,9 @@ func SetupLogging(logDir string) {
 		log.Fatalf("Failed to create log directory: %v", err)
 	}
 
-	infoFile := openLogFile(filepath.Join(logDir, "info.log"))
-	warnFile := openLogFile(filepath.Join(logDir, "warn.log"))
-	errorFile := openLogFile(filepath.Join(logDir, "error.log"))
+	infoFile = openLogFile(filepath.Join(logDir, "info.log"))
+	warnFile = openLogFile(filepath.Join(logDir, "warn.log"))
+	errorFile = openLogFile(filepath.Join(logDir, "error.log"))
 
 	infoWriter := io.MultiWriter(os.Stdout, infoFile)
 	warnWriter := io.MultiWriter(os.Stdout, warnFile)
@@ -71,6 +75,25 @@ func Log(level string, format string, v ...interface{}) {
 		errorLog.Println(logEntry)
 	default:
 		infoLog.Println(logEntry)
+	}
+}
+
+// FlushLogs ensures that all log files flush their buffered data to disk.
+func FlushLogs() {
+	if infoFile != nil {
+		if err := infoFile.Sync(); err != nil {
+			log.Printf("failed to sync infoFile: %v", err)
+		}
+	}
+	if warnFile != nil {
+		if err := warnFile.Sync(); err != nil {
+			log.Printf("failed to sync warnFile: %v", err)
+		}
+	}
+	if errorFile != nil {
+		if err := errorFile.Sync(); err != nil {
+			log.Printf("failed to sync errorFile: %v", err)
+		}
 	}
 }
 

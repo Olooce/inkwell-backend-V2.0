@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 var ollamaCmd *exec.Cmd // Store the Ollama process
 var ollamaClient *llm.OllamaClient
 var diffussionClient *llm.StableDiffusionWrapper
+var wg sync.WaitGroup
 
 func main() {
 	utilities.SetupLogging("logs")
@@ -101,12 +103,16 @@ func main() {
 	service.InitAnalysisEventListeners(storyRepo, ollamaClient)
 
 	// Fire-and-forget: run GenerateMissingComics in the background.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		service.GenerateMissingComics(storyRepo)
 	}()
 
 	// Fire-and-forget: run CreateAnalysisForAllStoriesWithoutIt in the background.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if err := service.CreateAnalysisForAllStoriesWithoutIt(storyRepo, ollamaClient); err != nil {
 			utilities.Error("Error creating analysis for stories: %v", err)
 		}
@@ -550,26 +556,30 @@ func main() {
 		c.File(filePath)
 	})
 
-	// Start the server
-	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("Server failed: %v", err)
-	}
-
-	// **Graceful shutdown handling in a separate goroutine**
+	// Set up signal channel before starting the server.
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
+	// Run the server in a goroutine.
 	go func() {
-		<-signalChan
-		utilities.Info("Received termination signal. Shutting down gracefully...")
-
-		stopOllama()
-
-		utilities.Info("Application shut down successfully.")
-		os.Exit(0)
+		addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
+		if err := r.Run(addr); err != nil {
+			log.Fatalf("Server failed: %v", err)
+		}
 	}()
 
+	// Wait for termination signal.
+	<-signalChan
+	utilities.Info("Received termination signal. Shutting down gracefully...")
+
+	stopOllama()
+	wg.Wait()
+
+	utilities.Info("Application shut down successfully.")
+
+	utilities.FlushLogs()
+
+	os.Exit(0)
 }
 
 func printStartUpBanner() {
