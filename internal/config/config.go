@@ -16,78 +16,117 @@ var (
 
 // APIConfig represents the root element.
 type APIConfig struct {
-	XMLName        xml.Name             `xml:"API"`
-	RequestDump    bool                 `xml:"REQUEST_DUMP,attr"`
-	Context        ContextConfig        `xml:"CONTEXT"`
-	Authentication AuthenticationConfig `xml:"AUTHENTICATION"`
-	Pagination     PaginationConfig     `xml:"PAGINATION"`
-	DB             DBConfig             `xml:"DB"`
-	ThirdParty     ThirdPartyConfig     `xml:"THIRD_PARTY"`
+	XMLName        xml.Name             xml:"API"
+	RequestDump    bool                 xml:"REQUEST_DUMP,attr"
+	Context        ContextConfig        xml:"CONTEXT"
+	Authentication AuthenticationConfig xml:"AUTHENTICATION"
+	Pagination     PaginationConfig     xml:"PAGINATION"
+	DB             DBConfig             xml:"DB"
+	ThirdParty     ThirdPartyConfig     xml:"THIRD_PARTY"
 }
 
 // ContextConfig holds basic server settings.
 type ContextConfig struct {
-	Port            int                  `xml:"PORT"`
-	Host            string               `xml:"HOST"`
-	Path            string               `xml:"PATH"`
-	TimeZone        string               `xml:"TIME_ZONE"`
-	EnableBasicAuth bool                 `xml:"ENABLE_BASIC_AUTH"`
-	Mode            string               `xml:"MODE"` // "release" or "debug"
-	TrustedProxies  TrustedProxiesConfig `xml:"TRUSTED_PROXIES"`
+	Port            int                  xml:"PORT"
+	Host            string               xml:"HOST"
+	Path            string               xml:"PATH"
+	TimeZone        string               xml:"TIME_ZONE"
+	EnableBasicAuth bool                 xml:"ENABLE_BASIC_AUTH"
+	Mode            string               xml:"MODE" // "release" or "debug"
+	TrustedProxies  TrustedProxiesConfig xml:"TRUSTED_PROXIES"
 }
 
 // TrustedProxiesConfig holds a list of trusted proxy IP addresses.
 type TrustedProxiesConfig struct {
-	Proxies []string `xml:"PROXY"`
+	Proxies []string xml:"PROXY"
 }
 
+// ThirdPartyConfig holds external service credentials.
 type ThirdPartyConfig struct {
-	HFToken    string `xml:"HF_TOKEN"`
-	OllamaHost string `xml:"OLLAMA_HOST"`
+	HFToken    string xml:"HF_TOKEN"
+	OllamaHost string xml:"OLLAMA_HOST"
 }
 
 // AuthenticationConfig holds authentication settings.
 type AuthenticationConfig struct {
-	MultipleSameUserSessions bool `xml:"MULTIPLE_SAME_USER_SESSIONS,attr"`
-	EnableTokenAuth          bool `xml:"ENABLE_TOKEN_AUTH"`
-	SessionTimeout           int  `xml:"SESSION_TIMEOUT"`
+	MultipleSameUserSessions bool              xml:"MULTIPLE_SAME_USER_SESSIONS,attr"
+	EnableTokenAuth          bool              xml:"ENABLE_TOKEN_AUTH"
+	SessionTimeouts          map[string]int    xml:"SESSION_TIMEOUT"
+	SecretKeys               map[string]string xml:"SECRET_KEY"
+}
+
+// UnmarshalXML customizes XML parsing for AuthenticationConfig.
+func (a *AuthenticationConfig) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	type Alias AuthenticationConfig
+	aux := &struct {
+		SessionTimeouts []struct {
+			Type     string xml:"TYPE,attr"
+			TimeUnit string xml:"TIME-UNIT,attr"
+			Value    int    xml:",chardata"
+		} xml:"SESSION_TIMEOUT"
+		SecretKeys []struct {
+			Type  string xml:"TYPE,attr"
+			Value string xml:",chardata"
+		} xml:"SECRET_KEY"
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+
+	if err := d.DecodeElement(aux, &start); err != nil {
+		return err
+	}
+
+	// Convert timeouts to map
+	a.SessionTimeouts = make(map[string]int)
+	for _, t := range aux.SessionTimeouts {
+		a.SessionTimeouts[t.Type] = t.Value
+	}
+
+	// Convert secret keys to map
+	a.SecretKeys = make(map[string]string)
+	for _, k := range aux.SecretKeys {
+		a.SecretKeys[k.Type] = k.Value
+	}
+
+	return nil
 }
 
 // PaginationConfig holds pagination settings.
 type PaginationConfig struct {
-	PageSize int `xml:"PAGE_SIZE"`
+	PageSize int xml:"PAGE_SIZE"
 }
 
 // DBConfig holds database connection settings.
 type DBConfig struct {
-	Initialize bool         `xml:"INITIALIZE"`
-	Server     string       `xml:"SERVER"`
-	Host       string       `xml:"HOST"`
-	Port       int          `xml:"PORT"`
-	Driver     string       `xml:"DRIVER"`
-	SSLMode    string       `xml:"SSL_MODE"`
-	Names      DBNames      `xml:"NAMES"`
-	Username   string       `xml:"USERNAME"`
-	Password   DBPassword   `xml:"PASSWORD"`
-	Pool       DBPoolConfig `xml:"POOL"`
+	Initialize bool         xml:"INITIALIZE"
+	Server     string       xml:"SERVER"
+	Host       string       xml:"HOST"
+	Port       int          xml:"PORT"
+	Driver     string       xml:"DRIVER"
+	SSLMode    string       xml:"SSL_MODE"
+	Names      DBNames      xml:"NAMES"
+	Username   string       xml:"USERNAME"
+	Password   DBPassword   xml:"PASSWORD"
+	Pool       DBPoolConfig xml:"POOL"
 }
 
 // DBNames holds the names defined in the DB section.
 type DBNames struct {
-	INKWELL string `xml:"INKWELL,attr"`
+	INKWELL string xml:"INKWELL,attr"
 }
 
 // DBPassword holds password details.
 type DBPassword struct {
-	Type  string `xml:"TYPE,attr"`
-	Value string `xml:",chardata"`
+	Type  string xml:"TYPE,attr"
+	Value string xml:",chardata"
 }
 
 // DBPoolConfig holds database connection pooling settings.
 type DBPoolConfig struct {
-	MaxOpenConns    int `xml:"MAX_OPEN_CONNS"`
-	MaxIdleConns    int `xml:"MAX_IDLE_CONNS"`
-	ConnMaxLifetime int `xml:"CONN_MAX_LIFETIME"`
+	MaxOpenConns    int xml:"MAX_OPEN_CONNS"
+	MaxIdleConns    int xml:"MAX_IDLE_CONNS"
+	ConnMaxLifetime int xml:"CONN_MAX_LIFETIME"
 }
 
 // LoadConfig loads and parses the XML configuration from the given file.
