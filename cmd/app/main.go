@@ -598,7 +598,7 @@ func startOllama() {
 	go func() {
 		scanner := bufio.NewScanner(stdoutPipe)
 		for scanner.Scan() {
-			log.Println(scanner.Text()) // Normal logs
+			utilities.Info(scanner.Text()) // Normal logs
 		}
 	}()
 
@@ -606,11 +606,11 @@ func startOllama() {
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			log.Println("[OLLAMA WARNING]", scanner.Text()) // Prefix error logs
+			utilities.Error("[OLLAMA WARNING]", scanner.Text()) // Prefix error logs
 		}
 	}()
 
-	log.Println("Ollama started successfully")
+	utilities.Info("Ollama started successfully")
 }
 
 // Check if Ollama is already running
@@ -622,7 +622,7 @@ func isOllamaRunning() bool {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			log.Printf("Failed to close body: %v", err)
+			utilities.Error("Failed to close body: %v", err)
 		}
 	}(resp.Body)
 	return resp.StatusCode == http.StatusOK
@@ -632,13 +632,13 @@ func isOllamaRunning() bool {
 func waitForOllama() {
 	for i := 0; i < 10; i++ { // Try 10 times before failing
 		if isOllamaRunning() {
-			log.Println("Ollama is now ready.")
+			utilities.Info("Ollama is now ready.")
 			return
 		}
-		log.Println("Waiting for Ollama to start...")
+		utilities.Info("Waiting for Ollama to start...")
 		time.Sleep(2 * time.Second)
 	}
-	log.Fatal("Ollama did not start in time.")
+	utilities.Error("Ollama did not start in time.")
 }
 
 // Preload Ollama model
@@ -659,19 +659,19 @@ func preloadModel(modelName string) {
 	}(resp.Body)
 
 	if resp.StatusCode == http.StatusOK {
-		log.Printf("Model '%s' preloaded successfully.", modelName)
+		utilities.Info("Model '%s' preloaded successfully.", modelName)
 	} else {
-		log.Printf("Failed to preload model '%s', status: %d", modelName, resp.StatusCode)
+		utilities.Warn("Failed to preload model '%s', status: %d", modelName, resp.StatusCode)
 	}
 }
 
 // Stop Ollama on shutdown
 func stopOllama() {
 	if ollamaCmd != nil {
-		log.Println("Stopping Ollama...")
+		utilities.Info("Stopping Ollama...")
 		err := ollamaCmd.Process.Signal(syscall.SIGTERM)
 		if err != nil {
-			log.Printf("Failed to stop Ollama: %v", err)
+			utilities.Error("Failed to stop Ollama: %v", err)
 		}
 	}
 }
