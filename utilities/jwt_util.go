@@ -19,12 +19,10 @@ var (
 )
 
 // Initialize config values once
-func init() {
-	cfg := config.GetConfig()
+func InitAuthConfig(cfg *config.APIConfig) {
 	if cfg == nil {
-		panic("failed to load configuration") // Ensure we don't proceed without config
+		panic("failed to load configuration")
 	}
-
 	// Load secrets
 	accessSecret = []byte(cfg.Authentication.SecretKeys["ACCESS"])
 	refreshSecret = []byte(cfg.Authentication.SecretKeys["REFRESH"])
@@ -51,9 +49,9 @@ func parseDuration(value int, unit string) time.Duration {
 
 // Claims struct
 type Claims struct {
-	UserID   uint   json:"user_id"
-	Username string json:"username"
-	Email    string json:"email"
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
 	jwt.RegisteredClaims
 }
 

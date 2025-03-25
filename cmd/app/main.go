@@ -45,6 +45,8 @@ func main() {
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
 
+	utilities.InitAuthConfig(cfg)
+
 	//err = llm.AuthenticateHuggingFace(cfg)
 	//if err != nil {
 	//	log.Fatalf("Hugging Face authentication failed: %v", err)
