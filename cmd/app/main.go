@@ -561,7 +561,9 @@ func main() {
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	// Run the server in a goroutine.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
 		if err := r.Run(addr); err != nil {
 			log.Fatalf("Server failed: %v", err)
