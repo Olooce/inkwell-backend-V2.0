@@ -17,7 +17,7 @@ var (
 	logMutex = &sync.Mutex{}
 )
 
-func setupLogging(logDir string) {
+func SetupLogging(logDir string) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)
 	}
@@ -48,7 +48,7 @@ func openLogFile(path string) *os.File {
 }
 
 func getCallerInfo() string {
-	pc, _, _, ok := runtime.Caller(2)
+	pc, _, _, ok := runtime.Caller(3)
 	if !ok {
 		return "unknown"
 	}
@@ -60,7 +60,7 @@ func Log(level string, format string, v ...interface{}) {
 	defer logMutex.Unlock()
 
 	message := fmt.Sprintf(format, v...)
-	logEntry := fmt.Sprintf("%s [%s]: %s", level, getCallerInfo(), message)
+	logEntry := fmt.Sprintf("[%s]: %s", getCallerInfo(), message)
 
 	switch level {
 	case "INFO":

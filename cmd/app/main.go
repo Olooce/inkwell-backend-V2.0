@@ -35,6 +35,8 @@ var ollamaClient *llm.OllamaClient
 var diffussionClient *llm.StableDiffusionWrapper
 
 func main() {
+	utilities.SetupLogging("logs")
+	utilities.Info("Fhste")
 	// Load XML configuration from file.
 	cfg, err := config.LoadConfig("config.xml")
 	if err != nil {

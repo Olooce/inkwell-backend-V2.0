@@ -20,3 +20,5 @@ working/*
 !working/.gitkeep
 !working/storyImages/.gitkeep
 inkwell
+.log
+/logs/
