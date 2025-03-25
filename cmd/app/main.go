@@ -560,11 +560,11 @@ func main() {
 
 	go func() {
 		<-signalChan
-		log.Println("Received termination signal. Shutting down gracefully...")
+		utilities.Info("Received termination signal. Shutting down gracefully...")
 
 		stopOllama()
 
-		log.Println("Application shut down successfully.")
+		utilities.Info("Application shut down successfully.")
 		os.Exit(0)
 	}()
 
