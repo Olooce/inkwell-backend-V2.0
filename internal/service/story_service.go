@@ -138,13 +138,24 @@ func (s *storyService) GetProgress(userID uint) (map[string]interface{}, error) 
 	if err != nil {
 		return nil, err
 	}
+	
+	if story.Status == "completed" {
+		return map[string]interface{}{
+			"message": "No active story",
+		}, nil
+	}
+
 	count, err := s.storyRepo.GetSentenceCount(story.ID)
 	if err != nil {
 		return nil, err
 	}
+
+	const maxSentencesAllowed = 5
+	sentencesLeft := maxSentencesAllowed - count
+
 	progress := map[string]interface{}{
 		"current_sentence_count": count,
-		"max_sentences":          5,
+		"max_sentences":          sentencesLeft,
 		"story_status":           story.Status,
 	}
 	return progress, nil
