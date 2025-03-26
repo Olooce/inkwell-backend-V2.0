@@ -385,43 +385,6 @@ func main() {
 			})
 		})
 
-		// POST /stories/start_story: Start a new story
-		storiesGroup.POST("/start_story", func(c *gin.Context) {
-			var req struct {
-				Title string `json:"title" binding:"required"`
-			}
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-				return
-			}
-
-			userID, exists := c.Get("user_id")
-			if !exists {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
-				return
-			}
-			uid, ok := userID.(uint)
-			if !ok {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
-				return
-			}
-
-			story, err := storyService.CreateStory(uid, req.Title)
-			if err != nil {
-				log.Println(err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create story"})
-				return
-			}
-
-			// Return the structure expected by the frontend:
-			// { story_id, guidance, max_sentences }
-			c.JSON(http.StatusCreated, gin.H{
-				"story_id":      story.ID,
-				"guidance":      "Begin with an exciting sentence!",
-				"max_sentences": 5,
-			})
-		})
-
 		// POST /stories/:id/add_sentence: Add a sentence to a story
 		storiesGroup.POST("/:id/add_sentence", func(c *gin.Context) {
 			storyIDParam := c.Param("id")
