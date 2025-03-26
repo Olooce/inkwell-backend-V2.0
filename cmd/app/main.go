@@ -243,6 +243,7 @@ func main() {
 
 			// Validate JSON input
 			if err := c.ShouldBindJSON(&req); err != nil {
+				log.Printf("Received payload: %+v", req)
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: missing required fields"})
 				return
 			}
@@ -359,6 +360,7 @@ func main() {
 				c.JSON(http.StatusOK, gin.H{
 					"message":                "You have an unfinished story",
 					"story_id":               progress["story_id"],
+					"title":                  progress["title"],
 					"guidance":               "Continue building on the story!",
 					"current_sentence_count": progress["current_sentence_count"],
 					"max_sentences":          progress["max_sentences"],

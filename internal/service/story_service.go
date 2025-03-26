@@ -138,7 +138,7 @@ func (s *storyService) GetProgress(userID uint) (map[string]interface{}, error) 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if story.Status == "completed" {
 		return map[string]interface{}{
 			"message": "No active story",
@@ -157,6 +157,8 @@ func (s *storyService) GetProgress(userID uint) (map[string]interface{}, error) 
 		"current_sentence_count": count,
 		"max_sentences":          sentencesLeft,
 		"story_status":           story.Status,
+		"story_id":               story.ID,
+		"title":                  story.Title,
 	}
 	return progress, nil
 }
