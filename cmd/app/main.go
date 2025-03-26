@@ -341,8 +341,12 @@ func main() {
 		}
 	
 		// Check if the user has an unfinished story
-		progress, err := storyService.GetProgress(uid)
-		if err == nil && progress["story_status"] == "in_progress" {
+ progress := map[string]interface{}{
++    "story_id":               story.ID,
+     "current_sentence_count": count,
+     "max_sentences":          sentencesLeft,
+     "story_status":           story.Status,
+ }
 			c.JSON(http.StatusOK, gin.H{
 				"message":                "You have an unfinished story",
 				"story_id":               progress["story_id"],
