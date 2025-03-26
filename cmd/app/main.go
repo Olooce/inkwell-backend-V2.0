@@ -320,9 +320,21 @@ func main() {
 	}
 
 	// Story routes.
+	storiesGroup := r.Group("/stories")
+	{
+		// GET /stories: Get all stories
+		storiesGroup.GET("/", func(c *gin.Context) {
+			stories, err := storyService.GetStories()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, stories)
+		})
+	}
 	storiesGroup.POST("/start_story", func(c *gin.Context) {
 		var req struct {
-			Title string json:"title" binding:"required"
+			Title string `json:"title" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
@@ -640,35 +652,49 @@ func printStartUpBanner() {
 
 // Start Ollama if not already running
 func startOllama() {
-	ollamaCmd = exec.Command("ollama", "serve")
+	var command string
+	var args []string
 
-	// Create a standard output pipe to filter logs
+	switch runtime.GOOS {
+	case "windows":
+		command = "cmd"
+		args = []string{"/C", "start", "ollama", "serve"}
+	case "darwin", "linux":
+		command = "ollama"
+		args = []string{"serve"}
+	default:
+		log.Println("Unsupported OS for starting Ollama")
+		return
+	}
+
+	ollamaCmd = exec.Command(command, args...)
+
+	// Create pipes for standard output and error.
 	stdoutPipe, _ := ollamaCmd.StdoutPipe()
 	stderrPipe, _ := ollamaCmd.StderrPipe()
 
-	// Start Ollama
 	err := ollamaCmd.Start()
 	if err != nil {
-		utilities.Error("Failed to start Ollama: %v", err)
+		log.Fatalf("Failed to start Ollama: %v", err)
 	}
 
-	// Process standard output logs
+	// Process standard output logs.
 	go func() {
 		scanner := bufio.NewScanner(stdoutPipe)
 		for scanner.Scan() {
-			utilities.Info(scanner.Text()) // Normal logs
+			log.Println(scanner.Text())
 		}
 	}()
 
-	// Process error output logs separately
+	// Process error output logs.
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			utilities.Error("[OLLAMA WARNING]", scanner.Text()) // Prefix error logs
+			log.Println("[OLLAMA WARNING]", scanner.Text())
 		}
 	}()
 
-	utilities.Info("Ollama started successfully")
+	log.Println("Ollama started successfully")
 }
 
 // Check if Ollama is already running
@@ -725,13 +751,38 @@ func preloadModel(modelName string) {
 
 // Stop Ollama on shutdown
 func stopOllama() {
-	if ollamaCmd != nil {
-		utilities.Info("Stopping Ollama...")
-		err := ollamaCmd.Process.Signal(syscall.SIGTERM)
-		if err != nil {
-			utilities.Error("Failed to stop Ollama: %v", err)
-		}
+	if ollamaCmd == nil {
+		log.Println("Ollama is not running.")
+		return
 	}
+
+	var command string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		command = "taskkill"
+		args = []string{"/F", "/IM", "ollama.exe"}
+	case "darwin", "linux":
+		command = "pkill"
+		args = []string{"-f", "ollama"}
+	default:
+		log.Println("Unsupported OS for stopping Ollama")
+		return
+	}
+
+	stopCmd := exec.Command(command, args...)
+	stopCmd.Stdout = os.Stdout
+	stopCmd.Stderr = os.Stderr
+
+	err := stopCmd.Run()
+	if err != nil {
+		log.Printf("Failed to stop Ollama: %v", err)
+		return
+	}
+
+	ollamaCmd = nil
+	log.Println("Ollama stopped successfully")
 }
 
 func isOllamaInstalled() bool {
