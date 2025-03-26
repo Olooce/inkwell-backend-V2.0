@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -140,7 +141,7 @@ func main() {
 	r.Use(utilities.AuthMiddleware())
 
 	r.Use(utilities.RateLimitMiddleware())
-	
+
 	// Auth routes.
 	auth := r.Group("/auth")
 	{
@@ -331,62 +332,58 @@ func main() {
 			}
 			c.JSON(http.StatusOK, stories)
 		})
-	}
-	storiesGroup.POST("/start_story", func(c *gin.Context) {
-		var req struct {
-			Title string `json:"title" binding:"required"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-			return
-		}
-	
-		userID, exists := c.Get("user_id")
-		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
-			return
-		}
-		uid, ok := userID.(uint)
-		if !ok {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
-			return
-		}
-	
-		// Check if the user has an unfinished story
- progress := map[string]interface{}{
-+    "story_id":               story.ID,
-     "current_sentence_count": count,
-     "max_sentences":          sentencesLeft,
-     "story_status":           story.Status,
- }
-			c.JSON(http.StatusOK, gin.H{
-				"message":                "You have an unfinished story",
-				"story_id":               progress["story_id"],
-				"guidance":               "Continue building on the story!",
-				"current_sentence_count": progress["current_sentence_count"],
-				"max_sentences":          progress["max_sentences"],
-				"story_status":           progress["story_status"],
+
+		storiesGroup.POST("/start_story", func(c *gin.Context) {
+			var req struct {
+				Title string `json:"title" binding:"required"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+				return
+			}
+
+			userID, exists := c.Get("user_id")
+			if !exists {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+				return
+			}
+			uid, ok := userID.(uint)
+			if !ok {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
+				return
+			}
+
+			// Check if the user has an unfinished story
+			progress, err := storyService.GetProgress(uid)
+			if err == nil && progress["story_status"] == "in_progress" {
+				c.JSON(http.StatusOK, gin.H{
+					"message":                "You have an unfinished story",
+					"story_id":               progress["story_id"],
+					"guidance":               "Continue building on the story!",
+					"current_sentence_count": progress["current_sentence_count"],
+					"max_sentences":          progress["max_sentences"],
+					"story_status":           progress["story_status"],
+				})
+				return
+			}
+
+			// Start a new story
+			story, err := storyService.CreateStory(uid, req.Title)
+			if err != nil {
+				log.Println(err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create story"})
+				return
+			}
+
+			c.JSON(http.StatusCreated, gin.H{
+				"message":                "New story started",
+				"story_id":               story.ID,
+				"guidance":               "Begin with an exciting sentence!",
+				"current_sentence_count": 0,
+				"max_sentences":          5,
+				"story_status":           "in_progress",
 			})
-			return
-		}
-	
-		// Start a new story
-		story, err := storyService.CreateStory(uid, req.Title)
-		if err != nil {
-			log.Println(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create story"})
-			return
-		}
-	
-		c.JSON(http.StatusCreated, gin.H{
-			"message":                "New story started",
-			"story_id":               story.ID,
-			"guidance":               "Begin with an exciting sentence!",
-			"current_sentence_count": 0,
-			"max_sentences":          5,
-			"story_status":           "in_progress",
 		})
-	})
 
 		// POST /stories/start_story: Start a new story
 		storiesGroup.POST("/start_story", func(c *gin.Context) {
