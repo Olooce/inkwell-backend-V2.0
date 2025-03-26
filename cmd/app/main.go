@@ -139,6 +139,8 @@ func main() {
 	//Authentication middleware
 	r.Use(utilities.AuthMiddleware())
 
+	r.Use(utilities.RateLimitMiddleware())
+	
 	// Auth routes.
 	auth := r.Group("/auth")
 	{
