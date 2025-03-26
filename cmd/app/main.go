@@ -611,8 +611,6 @@ func printStartUpBanner() {
 }
 
 // Start Ollama if not already running
-
-
 func startOllama() {
 	var command string
 	var args []string
@@ -657,7 +655,7 @@ func startOllama() {
 }
 
 // Handles log output
-func processLogs(pipe *bufio.Reader, prefix string) {
+func processLogs(pipe io.Reader, prefix string) {
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
 		text := scanner.Text()
@@ -674,9 +672,10 @@ func processLogs(pipe *bufio.Reader, prefix string) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		log.Printf("%s Log reading error: %v", prefix, err)
+		log.Printf("%s Log reading error: %v", prefix, err)
 	}
 }
+
 // Check if Ollama is already running
 func isOllamaRunning() bool {
 	resp, err := http.Get("http://localhost:11434")
