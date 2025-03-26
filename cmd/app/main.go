@@ -611,6 +611,8 @@ func printStartUpBanner() {
 }
 
 // Start Ollama if not already running
+
+
 func startOllama() {
 	var command string
 	var args []string
@@ -630,33 +632,51 @@ func startOllama() {
 	ollamaCmd = exec.Command(command, args...)
 
 	// Create pipes for standard output and error.
-	stdoutPipe, _ := ollamaCmd.StdoutPipe()
-	stderrPipe, _ := ollamaCmd.StderrPipe()
+	stdoutPipe, err := ollamaCmd.StdoutPipe()
+	if err != nil {
+		log.Fatalf("Failed to create stdout pipe: %v", err)
+	}
+	stderrPipe, err := ollamaCmd.StderrPipe()
+	if err != nil {
+		log.Fatalf("Failed to create stderr pipe: %v", err)
+	}
 
-	err := ollamaCmd.Start()
+	// Start the process
+	err = ollamaCmd.Start()
 	if err != nil {
 		log.Fatalf("Failed to start Ollama: %v", err)
 	}
 
 	// Process standard output logs.
-	go func() {
-		scanner := bufio.NewScanner(stdoutPipe)
-		for scanner.Scan() {
-			log.Println(scanner.Text())
-		}
-	}()
+	go processLogs(stdoutPipe, "[OLLAMA INFO]")
 
-	// Process error output logs.
-	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			log.Println("[OLLAMA WARNING]", scanner.Text())
-		}
-	}()
+	// Process error output logs with classification.
+	go processLogs(stderrPipe, "[OLLAMA ERROR]")
 
 	log.Println("Ollama started successfully")
 }
 
+// Handles log output
+func processLogs(pipe *bufio.Reader, prefix string) {
+	scanner := bufio.NewScanner(pipe)
+	for scanner.Scan() {
+		text := scanner.Text()
+
+		// Classify log levels
+		if strings.Contains(text, "level=INFO") {
+			log.Println("[OLLAMA INFO]", text)
+		} else if strings.Contains(text, "level=WARN") {
+			log.Println("[OLLAMA WARNING]", text)
+		} else if strings.Contains(text, "level=ERROR") {
+			log.Println("[OLLAMA ERROR]", text)
+		} else {
+			log.Println(prefix, text)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("%s Log reading error: %v", prefix, err)
+	}
+}
 // Check if Ollama is already running
 func isOllamaRunning() bool {
 	resp, err := http.Get("http://localhost:11434")
