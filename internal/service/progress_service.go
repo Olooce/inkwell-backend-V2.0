@@ -1,3 +1,5 @@
+
+
 package service
 
 import (
@@ -9,8 +11,8 @@ import (
 
 // ProgressData holds the metrics for the progress report.
 type ProgressData struct {
-	InitialProgress map[string]interface{} `json:"initial_progress"`
-	CurrentProgress map[string]interface{} `json:"current_progress"`
+	InitialProgress map[string]interface{} ` json:"initial_progress" `
+	CurrentProgress map[string]interface{} ` json:"current_progress" `
 }
 
 // GenerateProgressData computes the progress data for a given user.
