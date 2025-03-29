@@ -73,19 +73,19 @@ func (r *assessmentRepository) GetQuestionByID(questionID uint) (*model.Question
 	return &question, nil
 }
 
-// Count the number of answered questions for an assessment
+// CountAnswersByAssessmentID Count the number of answered questions for an assessment
 func (r *assessmentRepository) CountAnswersByAssessmentID(assessmentID uint) (int, error) {
 	var count int64
 	err := db.GetDB().Model(&model.Answer{}).Where("assessment_id = ?", assessmentID).Count(&count).Error
 	return int(count), err
 }
 
-// Mark the user as having completed their assessment
+// MarkUserAssessmentCompleted Mark the user as having completed their assessment
 func (r *assessmentRepository) MarkUserAssessmentCompleted(userID uint) error {
 	return db.GetDB().Model(&model.User{}).Where("id = ?", userID).Update("initial_assessment_completed", true).Error
 }
 
-// Update assessment details
+// UpdateAssessment Update assessment details
 func (r *assessmentRepository) UpdateAssessment(assessment *model.Assessment) error {
 	return db.GetDB().Save(assessment).Error
 }

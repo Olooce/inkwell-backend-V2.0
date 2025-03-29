@@ -31,5 +31,5 @@ func (eb *EventBus) Publish(event string, data interface{}) {
 	}
 }
 
-// Global instance
+// GlobalEventBus Global instance
 var GlobalEventBus = NewEventBus()

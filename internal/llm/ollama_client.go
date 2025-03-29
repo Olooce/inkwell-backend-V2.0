@@ -78,7 +78,7 @@ func (o *OllamaClient) callOllama(prompt string) (string, error) {
 	return "", errors.New("invalid response from Ollama")
 }
 
-type LLMResponseChunk struct {
+type ResponseChunk struct {
 	Model     string `json:"model"`
 	CreatedAt string `json:"created_at"`
 	Response  string `json:"response"`
@@ -92,7 +92,7 @@ func AggregateStreamedResponse(body string) string {
 	var builder strings.Builder
 	for _, line := range lines {
 		if trimmed := strings.TrimSpace(line); trimmed != "" {
-			var chunk LLMResponseChunk
+			var chunk ResponseChunk
 			if err := json.Unmarshal([]byte(trimmed), &chunk); err != nil {
 				log.Println("Error unmarshaling chunk:", err)
 				continue
@@ -148,10 +148,6 @@ func parseQuestions(response string) []string {
 		}
 	}
 	return questions
-}
-
-func determineCorrectness(response string) bool {
-	return !strings.Contains(strings.ToLower(response), "incorrect")
 }
 
 func (o *OllamaClient) CorrectSentence(sentence string) (string, string, error) {

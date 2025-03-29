@@ -14,6 +14,7 @@ type questionRepository struct {
 	db *gorm.DB
 }
 
+//goland:noinspection ALL
 func NewQuestionRepository(db *gorm.DB) QuestionRepository {
 	return &questionRepository{db: db}
 }

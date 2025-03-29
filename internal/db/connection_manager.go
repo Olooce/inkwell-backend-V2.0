@@ -61,7 +61,7 @@ func InitDBFromConfig(cfg *config.APIConfig) {
 
 	printConnectionPoolStats(sqlDB, cfg)
 
-	fmt.Println("\nConnection Pool Initialized Successfully!\n")
+	fmt.Println("\nConnection Pool Initialized Successfully!")
 }
 
 // monitorConnectionPool checks DB health periodically.

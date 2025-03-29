@@ -55,6 +55,8 @@ func getValidOrigin(c *gin.Context) string {
 }
 
 // isValidIP checks if the request comes from a trusted IP
+//
+//goland:noinspection GoUnusedParameter
 func isValidIP(ip string) bool {
 	// TODO Implement specific IP validation
 	// return strings.Contains(ip, "127.0.0.1") || strings.HasPrefix(ip, "192.168.")

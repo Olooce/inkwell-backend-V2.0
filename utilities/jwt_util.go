@@ -18,7 +18,7 @@ var (
 	refreshExpiry time.Duration
 )
 
-// Initialize config values once
+// InitAuthConfig Initialize config values once
 func InitAuthConfig(cfg *config.APIConfig) {
 	if cfg == nil {
 		panic("failed to load configuration")

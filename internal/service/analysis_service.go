@@ -84,7 +84,7 @@ func InitAnalysisEventListeners(storyRepo repository.StoryRepository, ollamaClie
 	})
 }
 
-// / AnalyzeStory generates a prompt from the story content, calls the LLM,
+// AnalyzeStory / AnalyzeStory generates a prompt from the story content, calls the LLM,
 // and returns a structured analysis with writing tips and a performance score.
 func (a *analysisService) AnalyzeStory(story model.Story) (map[string]interface{}, error) {
 	prompt := fmt.Sprintf(
