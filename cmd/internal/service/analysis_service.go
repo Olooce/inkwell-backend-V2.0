@@ -2,10 +2,10 @@ package service
 
 import (
 	"fmt"
-	"inkwell-backend-V2.0/internal/llm"
-	"inkwell-backend-V2.0/internal/model"
-	"inkwell-backend-V2.0/internal/repository"
-	"inkwell-backend-V2.0/utilities"
+	"inkwell-backend-V2.0/cmd/internal/llm"
+	"inkwell-backend-V2.0/cmd/internal/model"
+	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/utilities"
 	"log"
 	"time"
 )

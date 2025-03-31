@@ -2,12 +2,11 @@ package service
 
 import (
 	"fmt"
-	"inkwell-backend-V2.0/utilities"
+	llm2 "inkwell-backend-V2.0/cmd/internal/llm"
+	"inkwell-backend-V2.0/cmd/internal/model"
+	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/utilities"
 	"time"
-
-	"inkwell-backend-V2.0/internal/llm"
-	"inkwell-backend-V2.0/internal/model"
-	"inkwell-backend-V2.0/internal/repository"
 )
 
 type StoryService interface {
@@ -21,11 +20,11 @@ type StoryService interface {
 
 type storyService struct {
 	storyRepo       repository.StoryRepository
-	llmClient       *llm.OllamaClient
-	diffusionClient *llm.StableDiffusionWrapper
+	llmClient       *llm2.OllamaClient
+	diffusionClient *llm2.StableDiffusionWrapper
 }
 
-func NewStoryService(storyRepo repository.StoryRepository, llmClient *llm.OllamaClient, diffusionClient *llm.StableDiffusionWrapper) StoryService {
+func NewStoryService(storyRepo repository.StoryRepository, llmClient *llm2.OllamaClient, diffusionClient *llm2.StableDiffusionWrapper) StoryService {
 	return &storyService{
 		storyRepo:       storyRepo,
 		llmClient:       llmClient,

@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"inkwell-backend-V2.0/internal/db"
-	"inkwell-backend-V2.0/internal/model"
+	"inkwell-backend-V2.0/cmd/internal/db"
+	"inkwell-backend-V2.0/cmd/internal/model"
 )
 
 type UserRepository interface {

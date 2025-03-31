@@ -5,7 +5,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"inkwell-backend-V2.0/internal/llm"
+	"inkwell-backend-V2.0/cmd/internal/config"
+	"inkwell-backend-V2.0/cmd/internal/db"
+	llm2 "inkwell-backend-V2.0/cmd/internal/llm"
+	"inkwell-backend-V2.0/cmd/internal/model"
+	repository2 "inkwell-backend-V2.0/cmd/internal/repository"
+	service2 "inkwell-backend-V2.0/cmd/internal/service"
+	utilities2 "inkwell-backend-V2.0/cmd/utilities"
 	"io"
 	"log"
 	"math/rand"
@@ -23,40 +29,33 @@ import (
 
 	"github.com/common-nighthawk/go-figure"
 	"github.com/gin-gonic/gin"
-
-	"inkwell-backend-V2.0/internal/config"
-	"inkwell-backend-V2.0/internal/db"
-	"inkwell-backend-V2.0/internal/model"
-	"inkwell-backend-V2.0/internal/repository"
-	"inkwell-backend-V2.0/internal/service"
-	"inkwell-backend-V2.0/utilities"
 )
 
 var ollamaCmd *exec.Cmd // Store the Ollama process
-var ollamaClient *llm.OllamaClient
-var diffussionClient *llm.StableDiffusionWrapper
+var ollamaClient *llm2.OllamaClient
+var diffussionClient *llm2.StableDiffusionWrapper
 var wg sync.WaitGroup
 
 func main() {
-	utilities.SetupLogging("logs")
+	utilities2.SetupLogging("logs")
 
 	// Load XML configuration from file.
 	cfg, err := config.LoadConfig("config.xml")
 	if err != nil {
-		utilities.Error("failed to load config: %v", err)
+		utilities2.Error("failed to load config: %v", err)
 	}
 
 	printStartUpBanner()
 	// Initialize DB using the loaded config.
 	db.InitDBFromConfig(cfg)
 
-	utilities.InitAuthConfig(cfg)
+	utilities2.InitAuthConfig(cfg)
 
 	//err = llm.AuthenticateHuggingFace(cfg)
 	//if err != nil {
 	//	log.Fatalf("Hugging Face authentication failed: %v", err)
 	//}
-	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
+	diffussionClient = &llm2.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
 
 	//imagePath, err := diffussionClient.GenerateImage("A house")
 	//if err != nil {
@@ -75,11 +74,11 @@ func main() {
 		startOllama()
 		waitForOllama()
 	} else {
-		utilities.Warn("Ollama not found locally. Using configured remote Ollama host:", ollamaHost)
+		utilities2.Warn("Ollama not found locally. Using configured remote Ollama host:", ollamaHost)
 	}
 
 	// Initialize Ollama Client
-	ollamaClient = llm.NewOllamaClient(ollamaHost + "/api/generate")
+	ollamaClient = llm2.NewOllamaClient(ollamaHost + "/api/generate")
 
 	// Preload model only if using local Ollama
 	if isOllamaInstalled() {
@@ -90,40 +89,40 @@ func main() {
 	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{},
 		&model.Sentence{}, &model.Comic{})
 	if err != nil {
-		utilities.Error("AutoMigration Error: %v", err)
+		utilities2.Error("AutoMigration Error: %v", err)
 		return
 	}
 
 	// Create repositories.
-	userRepo := repository.NewUserRepository()
-	assessmentRepo := repository.NewAssessmentRepository()
-	storyRepo := repository.NewStoryRepository()
+	userRepo := repository2.NewUserRepository()
+	assessmentRepo := repository2.NewAssessmentRepository()
+	storyRepo := repository2.NewStoryRepository()
 
 	// Register event listeners
-	service.InitComicEventListeners(storyRepo)
-	service.InitAnalysisEventListeners(storyRepo, ollamaClient)
+	service2.InitComicEventListeners(storyRepo)
+	service2.InitAnalysisEventListeners(storyRepo, ollamaClient)
 
 	// Fire-and-forget: run GenerateMissingComics in the background.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		service.GenerateMissingComics(storyRepo)
+		service2.GenerateMissingComics(storyRepo)
 	}()
 
 	// Fire-and-forget: run CreateAnalysisForAllStoriesWithoutIt in the background.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := service.CreateAnalysisForAllStoriesWithoutIt(storyRepo, ollamaClient); err != nil {
-			utilities.Error("Error creating analysis for stories: %v", err)
+		if err := service2.CreateAnalysisForAllStoriesWithoutIt(storyRepo, ollamaClient); err != nil {
+			utilities2.Error("Error creating analysis for stories: %v", err)
 		}
 	}()
 
 	// Create services.
-	authService := service.NewAuthService(userRepo)
-	userService := service.NewUserService(userRepo)
-	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
-	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
+	authService := service2.NewAuthService(userRepo)
+	userService := service2.NewUserService(userRepo)
+	assessmentService := service2.NewAssessmentService(assessmentRepo, ollamaClient)
+	storyService := service2.NewStoryService(storyRepo, ollamaClient, diffussionClient)
 
 	// Initialize Gin router.
 	gin.SetMode(cfg.Context.Mode)
@@ -131,16 +130,16 @@ func main() {
 
 	// Set trusted proxies from config.
 	if err := r.SetTrustedProxies(cfg.Context.TrustedProxies.Proxies); err != nil {
-		utilities.Error("Failed to set trusted proxies: %v", err)
+		utilities2.Error("Failed to set trusted proxies: %v", err)
 	}
 
 	// CORS configuration.
-	r.Use(utilities.CORSMiddleware())
+	r.Use(utilities2.CORSMiddleware())
 
 	//Authentication middleware
-	r.Use(utilities.AuthMiddleware())
+	r.Use(utilities2.AuthMiddleware())
 
-	r.Use(utilities.RateLimitMiddleware())
+	r.Use(utilities2.RateLimitMiddleware())
 
 	// Auth routes.
 	auth := r.Group("/auth")
@@ -524,7 +523,7 @@ func main() {
 			}
 
 			// Generate progress data from the database.
-			progressData, err := service.GenerateProgressData(db.GetDB(), uid)
+			progressData, err := service2.GenerateProgressData(db.GetDB(), uid)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -592,14 +591,14 @@ func main() {
 
 	// Wait for termination signal.
 	<-signalChan
-	utilities.Info("Received termination signal. Shutting down gracefully...")
+	utilities2.Info("Received termination signal. Shutting down gracefully...")
 
 	stopOllama()
 	wg.Wait()
 
-	utilities.Info("Application shut down successfully.")
+	utilities2.Info("Application shut down successfully.")
 
-	utilities.FlushLogs()
+	utilities2.FlushLogs()
 
 	os.Exit(0)
 }
@@ -687,7 +686,7 @@ func isOllamaRunning() bool {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			utilities.Error("Failed to close body: %v", err)
+			utilities2.Error("Failed to close body: %v", err)
 		}
 	}(resp.Body)
 	return resp.StatusCode == http.StatusOK
@@ -697,13 +696,13 @@ func isOllamaRunning() bool {
 func waitForOllama() {
 	for i := 0; i < 10; i++ { // Try 10 times before failing
 		if isOllamaRunning() {
-			utilities.Info("Ollama is now ready.")
+			utilities2.Info("Ollama is now ready.")
 			return
 		}
-		utilities.Info("Waiting for Ollama to start...")
+		utilities2.Info("Waiting for Ollama to start...")
 		time.Sleep(2 * time.Second)
 	}
-	utilities.Error("Ollama did not start in time.")
+	utilities2.Error("Ollama did not start in time.")
 }
 
 // Preload Ollama model
@@ -724,9 +723,9 @@ func preloadModel(modelName string) {
 	}(resp.Body)
 
 	if resp.StatusCode == http.StatusOK {
-		utilities.Info("Model '%s' preloaded successfully.", modelName)
+		utilities2.Info("Model '%s' preloaded successfully.", modelName)
 	} else {
-		utilities.Warn("Failed to preload model '%s', status: %d", modelName, resp.StatusCode)
+		utilities2.Warn("Failed to preload model '%s', status: %d", modelName, resp.StatusCode)
 	}
 }
 

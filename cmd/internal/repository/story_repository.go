@@ -2,8 +2,8 @@ package repository
 
 import (
 	"gorm.io/gorm"
-	"inkwell-backend-V2.0/internal/db"
-	"inkwell-backend-V2.0/internal/model"
+	"inkwell-backend-V2.0/cmd/internal/db"
+	"inkwell-backend-V2.0/cmd/internal/model"
 	"strings"
 )
 

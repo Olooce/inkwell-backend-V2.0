@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/base64"
 	"fmt"
-	"inkwell-backend-V2.0/utilities"
+	"inkwell-backend-V2.0/cmd/internal/model"
+	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/utilities"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,8 +13,6 @@ import (
 	"time"
 
 	"github.com/jung-kurt/gofpdf"
-	"inkwell-backend-V2.0/internal/model"
-	"inkwell-backend-V2.0/internal/repository"
 )
 
 type ComicService interface {

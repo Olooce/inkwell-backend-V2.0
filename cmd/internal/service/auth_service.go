@@ -6,11 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"inkwell-backend-V2.0/utilities"
-
 	"golang.org/x/crypto/bcrypt"
-	"inkwell-backend-V2.0/internal/model"
-	"inkwell-backend-V2.0/internal/repository"
+	"inkwell-backend-V2.0/cmd/internal/model"
+	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/utilities"
 )
 
 // AuthService interface

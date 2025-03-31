@@ -3,11 +3,11 @@ package utilities
 import (
 	"errors"
 	"fmt"
+	"inkwell-backend-V2.0/cmd/internal/config"
+	"inkwell-backend-V2.0/cmd/internal/model"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"inkwell-backend-V2.0/internal/config"
-	"inkwell-backend-V2.0/internal/model"
 )
 
 // Secret keys and expiration times from config
