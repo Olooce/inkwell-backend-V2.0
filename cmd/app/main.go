@@ -75,7 +75,7 @@ func main() {
 // CONFIGURATION & INITIALIZATION FUNCTIONS
 //
 
-func loadConfig(path string) *config.Config {
+func loadConfig(path string) *config.APIConfig {
 	cfg, err := config.LoadConfig(path)
 	if err != nil {
 		utilities.Error("failed to load config: %v", err)
@@ -84,15 +84,15 @@ func loadConfig(path string) *config.Config {
 	return cfg
 }
 
-func initDatabase(cfg *config.Config) {
+func initDatabase(cfg *config.APIConfig) {
 	db.InitDBFromConfig(cfg)
 }
 
-func initAuth(cfg *config.Config) {
+func initAuth(cfg *config.APIConfig) {
 	utilities.InitAuthConfig(cfg)
 }
 
-func initThirdPartyClients(cfg *config.Config) {
+func initThirdPartyClients(cfg *config.APIConfig) {
 	// Initialize Stable Diffusion wrapper.
 	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
 	// Determine Ollama host.
@@ -170,7 +170,7 @@ func createServices(userRepo repository.UserRepository, assessmentRepo repositor
 	return authService, userService, assessmentService, storyService
 }
 
-func initRouter(cfg *config.Config) *gin.Engine {
+func initRouter(cfg *config.APIConfig) *gin.Engine {
 	gin.SetMode(cfg.Context.Mode)
 	router := gin.Default()
 	if err := router.SetTrustedProxies(cfg.Context.TrustedProxies.Proxies); err != nil {
@@ -550,7 +550,7 @@ func registerRoutes(r *gin.Engine, authService service.AuthService, userService 
 // SERVER RUN & GRACEFUL SHUTDOWN
 //
 
-func runServer(cfg *config.Config, router *gin.Engine) {
+func runServer(cfg *config.APIConfig, router *gin.Engine) {
 	// Set up channel for termination signals.
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
@@ -658,7 +658,7 @@ func isOllamaRunning() bool {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			utilities2.Error("Failed to close body: %v", err)
+			utilities.Error("Failed to close body: %v", err)
 		}
 	}(resp.Body)
 	return resp.StatusCode == http.StatusOK
@@ -668,13 +668,13 @@ func isOllamaRunning() bool {
 func waitForOllama() {
 	for i := 0; i < 10; i++ { // Try 10 times before failing
 		if isOllamaRunning() {
-			utilities2.Info("Ollama is now ready.")
+			utilities.Info("Ollama is now ready.")
 			return
 		}
-		utilities2.Info("Waiting for Ollama to start...")
+		utilities.Info("Waiting for Ollama to start...")
 		time.Sleep(2 * time.Second)
 	}
-	utilities2.Error("Ollama did not start in time.")
+	utilities.Error("Ollama did not start in time.")
 }
 
 // Preload Ollama model
