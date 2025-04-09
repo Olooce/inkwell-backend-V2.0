@@ -51,8 +51,7 @@ func main() {
 	runMigrations()
 
 	// Create repositories and register event listeners.
-	userRepo, assessmentRepo, storyRepoLocal := createRepositories()
-	storyRepo = storyRepoLocal // for use in event listeners
+	userRepo, assessmentRepo, storyRepo := createRepositories()
 	registerEventListeners(storyRepo)
 
 	// Run background tasks.
