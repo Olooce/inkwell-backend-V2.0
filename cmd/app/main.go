@@ -52,7 +52,7 @@ func main() {
 
 	// Create repositories and register event listeners.
 	userRepo, assessmentRepo, storyRepoLocal := createRepositories()
-	storyRepo = storyRepoLocal // for use in event listener below
+	storyRepo = storyRepoLocal // for use in event listeners
 	registerEventListeners(storyRepo)
 
 	// Run background tasks.
