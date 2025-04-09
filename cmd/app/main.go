@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"inkwell-backend-V2.0/cmd/internal/config"
 	"inkwell-backend-V2.0/cmd/internal/db"
-	llm2 "inkwell-backend-V2.0/cmd/internal/llm"
+	"inkwell-backend-V2.0/cmd/internal/llm"
 	"inkwell-backend-V2.0/cmd/internal/model"
-	repository2 "inkwell-backend-V2.0/cmd/internal/repository"
-	service2 "inkwell-backend-V2.0/cmd/internal/service"
-	utilities2 "inkwell-backend-V2.0/cmd/utilities"
+	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/internal/service"
+	"inkwell-backend-V2.0/cmd/utilities"
 	"io"
 	"log"
 	"math/rand"
@@ -31,116 +31,161 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var ollamaCmd *exec.Cmd // Store the Ollama process
-var ollamaClient *llm2.OllamaClient
-var diffussionClient *llm2.StableDiffusionWrapper
-var wg sync.WaitGroup
+var (
+	ollamaCmd        *exec.Cmd // Store the Ollama process
+	diffussionClient *llm.StableDiffusionWrapper
+	ollamaClient     *llm.OllamaClient
+	wg               = &sync.WaitGroup{}
+	storyRepo        repository.StoryRepository
+)
 
 func main() {
-	utilities2.SetupLogging("logs")
+	utilities.SetupLogging("logs")
 
-	// Load XML configuration from file.
-	cfg, err := config.LoadConfig("config.xml")
-	if err != nil {
-		utilities2.Error("failed to load config: %v", err)
-	}
-
+	cfg := loadConfig("config.xml")
 	printStartUpBanner()
-	// Initialize DB using the loaded config.
+
+	initDatabase(cfg)
+	initAuth(cfg)
+	initThirdPartyClients(cfg)
+	runMigrations()
+
+	// Create repositories and register event listeners.
+	userRepo, assessmentRepo, storyRepoLocal := createRepositories()
+	storyRepo = storyRepoLocal // for use in event listener below
+	registerEventListeners(storyRepo)
+
+	// Run background tasks.
+	runBackgroundTasks(storyRepo)
+
+	// Create services.
+	authService, userService, assessmentService, storyService := createServices(userRepo, assessmentRepo, storyRepo)
+
+	// Initialize and configure Gin router.
+	r := initRouter(cfg)
+
+	// Register API routes.
+	registerRoutes(r, authService, userService, assessmentService, storyService)
+
+	// Start server and listen for termination signals.
+	runServer(cfg, r)
+}
+
+//
+// CONFIGURATION & INITIALIZATION FUNCTIONS
+//
+
+func loadConfig(path string) *config.Config {
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		utilities.Error("failed to load config: %v", err)
+		os.Exit(1)
+	}
+	return cfg
+}
+
+func initDatabase(cfg *config.Config) {
 	db.InitDBFromConfig(cfg)
+}
 
-	utilities2.InitAuthConfig(cfg)
+func initAuth(cfg *config.Config) {
+	utilities.InitAuthConfig(cfg)
+}
 
-	//err = llm.AuthenticateHuggingFace(cfg)
-	//if err != nil {
-	//	log.Fatalf("Hugging Face authentication failed: %v", err)
-	//}
-	diffussionClient = &llm2.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
-
-	//imagePath, err := diffussionClient.GenerateImage("A house")
-	//if err != nil {
-	//	fmt.Printf("Warning: Failed to generate image: %v\n", err)
-	//} else {
-	//	fmt.Println("Generated image at:", imagePath)
-	//}
-
-	// Attempt to start Ollama
+func initThirdPartyClients(cfg *config.Config) {
+	// Initialize Stable Diffusion wrapper.
+	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
+	// Determine Ollama host.
 	ollamaHost := cfg.ThirdParty.OllamaHost
 	if ollamaHost == "" {
-		ollamaHost = "http://localhost:11434" // Default if not set
+		ollamaHost = "http://localhost:11434"
 	}
-
+	// Start Ollama if installed.
 	if isOllamaInstalled() {
 		startOllama()
 		waitForOllama()
 	} else {
-		utilities2.Warn("Ollama not found locally. Using configured remote Ollama host:", ollamaHost)
+		utilities.Warn("Ollama not found locally. Using configured remote Ollama host: %s", ollamaHost)
 	}
-
-	// Initialize Ollama Client
-	ollamaClient = llm2.NewOllamaClient(ollamaHost + "/api/generate")
-
-	// Preload model only if using local Ollama
+	// Initialize Ollama Client.
+	ollamaClient = llm.NewOllamaClient(ollamaHost + "/api/generate")
+	// Preload model if using local Ollama.
 	if isOllamaInstalled() {
 		preloadModel("mistral")
 	}
+}
 
-	// Run migrations.
-	err = db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{}, &model.Story{},
-		&model.Sentence{}, &model.Comic{})
+func runMigrations() {
+	err := db.GetDB().AutoMigrate(&model.User{}, &model.Assessment{}, &model.Question{}, &model.Answer{},
+		&model.Story{}, &model.Sentence{}, &model.Comic{})
 	if err != nil {
-		utilities2.Error("AutoMigration Error: %v", err)
-		return
+		utilities.Error("AutoMigration Error: %v", err)
+		os.Exit(1)
 	}
+}
 
-	// Create repositories.
-	userRepo := repository2.NewUserRepository()
-	assessmentRepo := repository2.NewAssessmentRepository()
-	storyRepo := repository2.NewStoryRepository()
+//
+// REPOSITORIES & EVENT REGISTRATION
+//
 
-	// Register event listeners
-	service2.InitComicEventListeners(storyRepo)
-	service2.InitAnalysisEventListeners(storyRepo, ollamaClient)
+func createRepositories() (repository.UserRepository, repository.AssessmentRepository, repository.StoryRepository) {
+	userRepo := repository.NewUserRepository()
+	assessmentRepo := repository.NewAssessmentRepository()
+	storyRepo := repository.NewStoryRepository()
+	return userRepo, assessmentRepo, storyRepo
+}
 
-	// Fire-and-forget: run GenerateMissingComics in the background.
-	wg.Add(1)
+func registerEventListeners(storyRepo repository.StoryRepository) {
+	service.InitComicEventListeners(storyRepo)
+	service.InitAnalysisEventListeners(storyRepo, ollamaClient)
+}
+
+//
+// BACKGROUND TASKS
+//
+
+func runBackgroundTasks(storyRepo repository.StoryRepository) {
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		service2.GenerateMissingComics(storyRepo)
+		service.GenerateMissingComics(storyRepo)
 	}()
-
-	// Fire-and-forget: run CreateAnalysisForAllStoriesWithoutIt in the background.
-	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := service2.CreateAnalysisForAllStoriesWithoutIt(storyRepo, ollamaClient); err != nil {
-			utilities2.Error("Error creating analysis for stories: %v", err)
+		if err := service.CreateAnalysisForAllStoriesWithoutIt(storyRepo, ollamaClient); err != nil {
+			utilities.Error("Error creating analysis for stories: %v", err)
 		}
 	}()
+}
 
-	// Create services.
-	authService := service2.NewAuthService(userRepo)
-	userService := service2.NewUserService(userRepo)
-	assessmentService := service2.NewAssessmentService(assessmentRepo, ollamaClient)
-	storyService := service2.NewStoryService(storyRepo, ollamaClient, diffussionClient)
+//
+// SERVICES & ROUTER INIT
+//
 
-	// Initialize Gin router.
+func createServices(userRepo repository.UserRepository, assessmentRepo repository.AssessmentRepository, storyRepo repository.StoryRepository) (service.AuthService, service.UserService, service.AssessmentService, service.StoryService) {
+	authService := service.NewAuthService(userRepo)
+	userService := service.NewUserService(userRepo)
+	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
+	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
+	return authService, userService, assessmentService, storyService
+}
+
+func initRouter(cfg *config.Config) *gin.Engine {
 	gin.SetMode(cfg.Context.Mode)
-	r := gin.Default()
-
-	// Set trusted proxies from config.
-	if err := r.SetTrustedProxies(cfg.Context.TrustedProxies.Proxies); err != nil {
-		utilities2.Error("Failed to set trusted proxies: %v", err)
+	router := gin.Default()
+	if err := router.SetTrustedProxies(cfg.Context.TrustedProxies.Proxies); err != nil {
+		utilities.Error("Failed to set trusted proxies: %v", err)
 	}
+	// Register global middleware.
+	router.Use(utilities.CORSMiddleware(), utilities.AuthMiddleware(), utilities.RateLimitMiddleware())
+	return router
+}
 
-	// CORS configuration.
-	r.Use(utilities2.CORSMiddleware())
+//
+// ROUTE REGISTRATION
+//
 
-	//Authentication middleware
-	r.Use(utilities2.AuthMiddleware())
-
-	r.Use(utilities2.RateLimitMiddleware())
-
+func registerRoutes(r *gin.Engine, authService service.AuthService, userService service.UserService, assessmentService service.AssessmentService, storyService service.StoryService) {
 	// Auth routes.
 	auth := r.Group("/auth")
 	{
@@ -156,7 +201,6 @@ func main() {
 			}
 			c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
 		})
-
 		auth.POST("/login", func(c *gin.Context) {
 			var creds struct {
 				Email    string `json:"email"`
@@ -173,22 +217,19 @@ func main() {
 			}
 			c.JSON(http.StatusOK, user)
 		})
-
 		auth.POST("/refresh", func(c *gin.Context) {
-			var request struct {
+			var req struct {
 				RefreshToken string `json:"refresh_token"`
 			}
-			if err := c.ShouldBindJSON(&request); err != nil {
+			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 				return
 			}
-
-			newTokens, err := authService.RefreshTokens(request.RefreshToken)
+			newTokens, err := authService.RefreshTokens(req.RefreshToken)
 			if err != nil {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 				return
 			}
-
 			c.JSON(http.StatusOK, newTokens)
 		})
 	}
@@ -208,23 +249,17 @@ func main() {
 	{
 		assessmentRoutes.POST("/start", func(c *gin.Context) {
 			grammarTopics := []string{
-				"Tenses",
-				"Subject-Verb Agreement",
-				"Active and Passive Voice",
-				"Direct and Indirect Speech",
-				"Punctuation Rules",
+				"Tenses", "Subject-Verb Agreement", "Active and Passive Voice",
+				"Direct and Indirect Speech", "Punctuation Rules",
 			}
-
 			src := rand.NewSource(time.Now().UnixNano())
 			ra := rand.New(src)
 			selectedTopic := grammarTopics[ra.Intn(len(grammarTopics))]
-
 			assessment, questions, err := assessmentService.CreateAssessment(c, selectedTopic)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-
 			c.JSON(http.StatusOK, gin.H{
 				"session_id": assessment.SessionID,
 				"topic":      selectedTopic,
@@ -232,60 +267,45 @@ func main() {
 			})
 		})
 
-		// Submit an answer
 		assessmentRoutes.POST("/submit", func(c *gin.Context) {
 			var req struct {
 				SessionID  string `json:"session_id" binding:"required"`
 				QuestionID uint   `json:"question_id" binding:"required"`
 				Answer     string `json:"answer" binding:"required"`
 			}
-
-			// Validate JSON input
 			if err := c.ShouldBindJSON(&req); err != nil {
 				log.Printf("Received payload: %+v", req)
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input: missing required fields"})
 				return
 			}
-
-			// Fetch the assessment
 			assessment, err := assessmentService.GetAssessmentBySessionID(req.SessionID)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
 				return
 			}
-
-			// Fetch the question by ID
-			question, err := assessmentRepo.GetQuestionByID(req.QuestionID)
+			question, err := repository.NewAssessmentRepository().GetQuestionByID(req.QuestionID)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
 				return
 			}
-
-			// Ensure the question belongs to the current assessment
-			var questionBelongsToAssessment bool
+			var belongs bool
 			for _, q := range assessment.Questions {
 				if q.ID == question.ID {
-					questionBelongsToAssessment = true
+					belongs = true
 					break
 				}
 			}
-
-			if !questionBelongsToAssessment {
+			if !belongs {
 				log.Printf("Assessment Questions: %+v", assessment.Questions)
 				log.Printf("Submitted Question ID: %d", req.QuestionID)
-
 				c.JSON(http.StatusForbidden, gin.H{"error": "Question does not belong to this assessment"})
 				return
 			}
-
-			// Evaluate the answer
 			isCorrect := question.CorrectAnswer == req.Answer
 			feedback := "Incorrect"
 			if isCorrect {
 				feedback = "Correct"
 			}
-
-			// Save the answer
 			answer := model.Answer{
 				AssessmentID: assessment.ID,
 				SessionID:    req.SessionID,
@@ -295,22 +315,17 @@ func main() {
 				IsCorrect:    isCorrect,
 				Feedback:     feedback,
 			}
-
 			answerResponse, err := assessmentService.SaveAnswer(&answer)
 			if err != nil {
 				log.Printf("Failed to save answer: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save answer"})
 				return
 			}
-
-			// Return a successful response
 			c.JSON(http.StatusOK, answerResponse)
 		})
 
-		// Get a specific assessment
 		assessmentRoutes.GET("/:session_id", func(c *gin.Context) {
 			sessionID := c.Param("session_id")
-
 			assessment, err := assessmentService.GetAssessmentBySessionID(sessionID)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Assessment not found"})
@@ -321,10 +336,9 @@ func main() {
 	}
 
 	// Story routes.
-	storiesGroup := r.Group("/stories")
+	storyRoutes := r.Group("/stories")
 	{
-		// GET /stories: Get all stories
-		storiesGroup.GET("/", func(c *gin.Context) {
+		storyRoutes.GET("/", func(c *gin.Context) {
 			stories, err := storyService.GetStories()
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -332,8 +346,7 @@ func main() {
 			}
 			c.JSON(http.StatusOK, stories)
 		})
-
-		storiesGroup.POST("/start_story", func(c *gin.Context) {
+		storyRoutes.POST("/start_story", func(c *gin.Context) {
 			var req struct {
 				Title string `json:"title" binding:"required"`
 			}
@@ -341,7 +354,6 @@ func main() {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 				return
 			}
-
 			userID, exists := c.Get("user_id")
 			if !exists {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
@@ -352,8 +364,7 @@ func main() {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
 				return
 			}
-
-			// Check if the user has an unfinished story
+			// Check for an unfinished story.
 			progress, err := storyService.GetProgress(uid)
 			if err == nil && progress["story_status"] == "in_progress" {
 				c.JSON(http.StatusOK, gin.H{
@@ -367,15 +378,12 @@ func main() {
 				})
 				return
 			}
-
-			// Start a new story
 			story, err := storyService.CreateStory(uid, req.Title)
 			if err != nil {
 				log.Println(err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create story"})
 				return
 			}
-
 			c.JSON(http.StatusCreated, gin.H{
 				"message":                "New story started",
 				"story_id":               story.ID,
@@ -385,16 +393,13 @@ func main() {
 				"story_status":           "in_progress",
 			})
 		})
-
-		// POST /stories/:id/add_sentence: Add a sentence to a story
-		storiesGroup.POST("/:id/add_sentence", func(c *gin.Context) {
+		storyRoutes.POST("/:id/add_sentence", func(c *gin.Context) {
 			storyIDParam := c.Param("id")
 			storyIDUint, err := strconv.ParseUint(storyIDParam, 10, 64)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid story ID"})
 				return
 			}
-
 			var req struct {
 				Sentence string `json:"sentence" binding:"required"`
 			}
@@ -402,36 +407,27 @@ func main() {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 				return
 			}
-
 			sentenceObj, err := storyService.AddSentence(uint(storyIDUint), req.Sentence)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add sentence"})
 				return
 			}
-			// Return the sentence in the expected structure:
-			// { sentence: { original_text, corrected_text, feedback, image_url } }
 			c.JSON(http.StatusOK, gin.H{"sentence": sentenceObj})
 		})
-
-		// POST /stories/:id/complete_story: Mark a story as complete
-		storiesGroup.POST("/:id/complete_story", func(c *gin.Context) {
+		storyRoutes.POST("/:id/complete_story", func(c *gin.Context) {
 			storyIDParam := c.Param("id")
 			storyIDUint, err := strconv.ParseUint(storyIDParam, 10, 64)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid story ID"})
 				return
 			}
-
-			err = storyService.CompleteStory(uint(storyIDUint))
-			if err != nil {
+			if err := storyService.CompleteStory(uint(storyIDUint)); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete story"})
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{"message": "Story completed successfully"})
 		})
-
-		// GET /stories/progress: Get progress of the current user's in-progress story
-		storiesGroup.GET("/progress", func(c *gin.Context) {
+		storyRoutes.GET("/progress", func(c *gin.Context) {
 			userID, exists := c.Get("user_id")
 			if !exists {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
@@ -449,9 +445,7 @@ func main() {
 			}
 			c.JSON(http.StatusOK, progress)
 		})
-
-		// GET /stories/comics: Get all generated comics for the user
-		storiesGroup.GET("/comics", func(c *gin.Context) {
+		storyRoutes.GET("/comics", func(c *gin.Context) {
 			userID, exists := c.Get("user_id")
 			if !exists {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
@@ -462,17 +456,16 @@ func main() {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
 				return
 			}
-
 			comics, err := storyService.GetComicsByUser(uid)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve comics"})
 				return
 			}
-
 			c.JSON(http.StatusOK, comics)
 		})
 	}
 
+	// Analysis routes.
 	analysisRoutes := r.Group("/writing-skills/analysis")
 	{
 		analysisRoutes.GET("/", func(c *gin.Context) {
@@ -486,15 +479,11 @@ func main() {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
 				return
 			}
-
-			// Fetch all completed stories with analysis for the user
 			stories, err := storyRepo.GetCompletedStoriesWithAnalysis(uid)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch completed stories"})
 				return
 			}
-
-			// Transform data into a JSON-friendly response format
 			var analyzedStories []map[string]interface{}
 			for _, story := range stories {
 				analyzedStories = append(analyzedStories, map[string]interface{}{
@@ -504,13 +493,9 @@ func main() {
 					"tips":     strings.Split(story.Tips, "\n"),
 				})
 			}
-
 			c.JSON(http.StatusOK, gin.H{"stories": analyzedStories})
 		})
-
-		// GET /writing-skills/analysis/overview
 		analysisRoutes.GET("/overview", func(c *gin.Context) {
-			// Retrieve the authenticated user's ID from context.
 			userIDVal, exists := c.Get("user_id")
 			if !exists {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
@@ -521,26 +506,19 @@ func main() {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
 				return
 			}
-
-			// Generate progress data from the database.
-			progressData, err := service2.GenerateProgressData(db.GetDB(), uid)
+			progressData, err := service.GenerateProgressData(db.GetDB(), uid)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-
 			c.JSON(http.StatusOK, gin.H{
 				"initial_progress": progressData.InitialProgress,
 				"current_progress": progressData.CurrentProgress,
 			})
 		})
-
-		// GET /writing-skills/analysis/download_report/?type=initial or type=current
 		analysisRoutes.GET("/download_report", func(c *gin.Context) {
 			reportType := c.Query("type")
 			var filename string
-
-			// Determine the file name based on the report type.
 			if reportType == "initial" {
 				filename = "initial_progress_report.pdf"
 			} else if reportType == "current" {
@@ -549,57 +527,51 @@ func main() {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid report type"})
 				return
 			}
-
 			pdfContent := []byte("%PDF-1.4 dummy pdf content")
-
-			// Set headers so the browser downloads the file.
 			c.Header("Content-Disposition", "attachment; filename="+filename)
 			c.Data(http.StatusOK, "application/pdf", pdfContent)
 		})
 	}
 
-	// Serve static files from "working" directory
+	// Static file serving.
 	r.StaticFS("/static", http.Dir("./working"))
-
-	// Serve PDFs with download headers
 	r.GET("/download/comics/:filename", func(c *gin.Context) {
 		filename := c.Param("filename")
 		filePath := "./working/comics/" + filename
-
-		// Check if it's a PDF
 		if filepath.Ext(filename) == ".pdf" {
 			c.Header("Content-Disposition", "attachment; filename="+filename)
 			c.Header("Content-Type", "application/pdf")
 		}
-
 		c.File(filePath)
 	})
+}
 
-	// Set up signal channel before starting the server.
+//
+// SERVER RUN & GRACEFUL SHUTDOWN
+//
+
+func runServer(cfg *config.Config, router *gin.Engine) {
+	// Set up channel for termination signals.
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
-	// Run the server in a goroutine.
+	// Run server in a goroutine.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
-		if err := r.Run(addr); err != nil {
+		if err := router.Run(addr); err != nil {
 			log.Fatalf("Server failed: %v", err)
 		}
 	}()
 
 	// Wait for termination signal.
 	<-signalChan
-	utilities2.Info("Received termination signal. Shutting down gracefully...")
-
+	utilities.Info("Received termination signal. Shutting down gracefully...")
 	stopOllama()
 	wg.Wait()
-
-	utilities2.Info("Application shut down successfully.")
-
-	utilities2.FlushLogs()
-
+	utilities.Info("Application shut down successfully.")
+	utilities.FlushLogs()
 	os.Exit(0)
 }
 
@@ -723,9 +695,9 @@ func preloadModel(modelName string) {
 	}(resp.Body)
 
 	if resp.StatusCode == http.StatusOK {
-		utilities2.Info("Model '%s' preloaded successfully.", modelName)
+		utilities.Info("Model '%s' preloaded successfully.", modelName)
 	} else {
-		utilities2.Warn("Failed to preload model '%s', status: %d", modelName, resp.StatusCode)
+		utilities.Warn("Failed to preload model '%s', status: %d", modelName, resp.StatusCode)
 	}
 }
 
