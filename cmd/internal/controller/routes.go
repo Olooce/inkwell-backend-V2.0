@@ -3,21 +3,39 @@ package controller
 import (
 	"github.com/gin-gonic/gin"
 	"inkwell-backend-V2.0/cmd/internal/service"
+	"net/http"
 )
 
-// RegisterRoutes registers all route groups and their endpoints.
-func RegisterRoutes(r *gin.Engine,
+func RegisterRoutes(
+	r *gin.Engine,
 	authService service.AuthService,
 	userService service.UserService,
 	assessmentService service.AssessmentService,
 	storyService service.StoryService,
-	progressService service.ProgressService, // if required by analysis endpoints
 ) {
-	registerAuthRoutes(r, authService)
-	registerUserRoutes(r, userService)
-	registerAssessmentRoutes(r, assessmentService)
+	// Auth routes.
+	authCtrl := NewAuthController(authService)
+	authRoutes := r.Group("/auth")
+	{
+		authRoutes.POST("/register", authCtrl.Register)
+		authRoutes.POST("/login", authCtrl.Login)
+		authRoutes.POST("/refresh", authCtrl.Refresh)
+	}
 
-	// Story routes via StoryController.
+	// User routes.
+	userCtrl := NewUserController(userService)
+	r.GET("/user", userCtrl.GetAllUsers)
+
+	// Assessment routes.
+	assessmentCtrl := NewAssessmentController(assessmentService)
+	assessRoutes := r.Group("/assessments")
+	{
+		assessRoutes.POST("/start", assessmentCtrl.StartAssessment)
+		assessRoutes.POST("/submit", assessmentCtrl.SubmitAssessment)
+		assessRoutes.GET("/:session_id", assessmentCtrl.GetAssessment)
+	}
+
+	// Story routes.
 	storyCtrl := NewStoryController(storyService)
 	storyRoutes := r.Group("/stories")
 	{
@@ -29,7 +47,7 @@ func RegisterRoutes(r *gin.Engine,
 		storyRoutes.GET("/comics", storyCtrl.GetComics)
 	}
 
-	// Analysis routes via AnalysisController.
+	// Analysis routes.
 	analysisCtrl := NewAnalysisController()
 	analysisRoutes := r.Group("/writing-skills/analysis")
 	{
@@ -38,5 +56,8 @@ func RegisterRoutes(r *gin.Engine,
 		analysisRoutes.GET("/download_report", analysisCtrl.DownloadReport)
 	}
 
-	registerStaticRoutes(r)
+	// Static routes.
+	staticCtrl := NewStaticController()
+	r.StaticFS("/static", http.Dir("./working"))
+	r.GET("/download/comics/:filename", staticCtrl.DownloadComic)
 }

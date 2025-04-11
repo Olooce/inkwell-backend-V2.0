@@ -1,12 +1,12 @@
 package controller
 
 import (
+	"inkwell-backend-V2.0/cmd/internal/repository"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"inkwell-backend-V2.0/cmd/internal/db"
-	"inkwell-backend-V2.0/cmd/internal/repository"
 	"inkwell-backend-V2.0/cmd/internal/service"
 )
 
@@ -17,7 +17,6 @@ func NewAnalysisController() *AnalysisController {
 	return &AnalysisController{}
 }
 
-// GetCompletedStories handles GET /writing-skills/analysis/
 func (ac *AnalysisController) GetCompletedStories(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -29,7 +28,8 @@ func (ac *AnalysisController) GetCompletedStories(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	stories, err := repository.NewAssessmentRepository().GetCompletedStoriesWithAnalysis(uid)
+
+	stories, err := repository.NewStoryRepository().GetCompletedStoriesWithAnalysis(uid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch completed stories"})
 		return
@@ -46,7 +46,6 @@ func (ac *AnalysisController) GetCompletedStories(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"stories": analyzedStories})
 }
 
-// GetOverview handles GET /writing-skills/analysis/overview
 func (ac *AnalysisController) GetOverview(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -69,7 +68,6 @@ func (ac *AnalysisController) GetOverview(c *gin.Context) {
 	})
 }
 
-// DownloadReport handles GET /writing-skills/analysis/download_report
 func (ac *AnalysisController) DownloadReport(c *gin.Context) {
 	reportType := c.Query("type")
 	var filename string

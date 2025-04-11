@@ -17,7 +17,6 @@ func NewStoryController(storyService service.StoryService) *StoryController {
 	return &StoryController{StoryService: storyService}
 }
 
-// GetStories handles GET /stories/
 func (sc *StoryController) GetStories(c *gin.Context) {
 	stories, err := sc.StoryService.GetStories()
 	if err != nil {
@@ -27,7 +26,6 @@ func (sc *StoryController) GetStories(c *gin.Context) {
 	c.JSON(http.StatusOK, stories)
 }
 
-// StartStory handles POST /stories/start_story
 func (sc *StoryController) StartStory(c *gin.Context) {
 	var req struct {
 		Title string `json:"title" binding:"required"`
@@ -76,7 +74,6 @@ func (sc *StoryController) StartStory(c *gin.Context) {
 	})
 }
 
-// AddSentence handles POST /stories/:id/add_sentence
 func (sc *StoryController) AddSentence(c *gin.Context) {
 	storyIDParam := c.Param("id")
 	storyIDUint, err := strconv.ParseUint(storyIDParam, 10, 64)
@@ -99,7 +96,6 @@ func (sc *StoryController) AddSentence(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"sentence": sentenceObj})
 }
 
-// CompleteStory handles POST /stories/:id/complete_story
 func (sc *StoryController) CompleteStory(c *gin.Context) {
 	storyIDParam := c.Param("id")
 	storyIDUint, err := strconv.ParseUint(storyIDParam, 10, 64)
@@ -114,7 +110,6 @@ func (sc *StoryController) CompleteStory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Story completed successfully"})
 }
 
-// GetProgress handles GET /stories/progress
 func (sc *StoryController) GetProgress(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -134,7 +129,6 @@ func (sc *StoryController) GetProgress(c *gin.Context) {
 	c.JSON(http.StatusOK, progress)
 }
 
-// GetComics handles GET /stories/comics
 func (sc *StoryController) GetComics(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
