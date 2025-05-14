@@ -713,7 +713,7 @@ func stopOllama() {
 			if err != nil {
 				log.Printf("Ollama exited with error: %v", err)
 			} else {
-				log.Println("Ollama exited cleanly.")
+				log.Println("Ollama exited gracefully.")
 			}
 		case <-time.After(5 * time.Second):
 			if err := ollamaCmd.Process.Kill(); err != nil {
@@ -762,7 +762,15 @@ func listOllama() ([]int, error) {
 	}
 
 	out, err := cmd.CombinedOutput()
-	if err != nil && len(out) == 0 {
+	if err != nil {
+		// On Unix, pgrep returns exit code 1 when no matches found
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil, nil
+		}
+		// On Windows, tasklist returns non-zero if no matches; treat similarly
+		if runtime.GOOS == "windows" && len(out) == 0 {
+			return nil, nil
+		}
 		return nil, err
 	}
 
