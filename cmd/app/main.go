@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/net/context"
 	"inkwell-backend-V2.0/cmd/internal/config"
 	"inkwell-backend-V2.0/cmd/internal/controller"
 	"inkwell-backend-V2.0/cmd/internal/db"
@@ -548,26 +549,52 @@ func initRouter(cfg *config.APIConfig) *gin.Engine {
 //
 
 func runServer(cfg *config.APIConfig, router *gin.Engine) {
-	// Set up channel for termination signals.
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Run server in a goroutine.
+	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: router,
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
-		if err := router.Run(addr); err != nil {
-			log.Fatalf("Server failed: %v", err)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			utilities.Error("Server failed: %v", err)
 		}
 	}()
 
-	// Wait for termination signal.
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 	<-signalChan
 	utilities.Info("Received termination signal. Shutting down gracefully...")
+
+	//cancel any background work
+	cancel()
 	stopOllama()
-	wg.Wait()
-	utilities.Info("Application shut down successfully.")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		utilities.Warn("HTTP server shutdown error: %v", err)
+	}
+
+	//wait for your goroutines, but force‑exit after 5s
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		utilities.Info("All workers exited gracefully.")
+	case <-time.After(5 * time.Second):
+		utilities.Warn("Timeout waiting for workers; forcing exit.")
+	}
+
+	utilities.Info("Application shut down.")
 	utilities.FlushLogs()
 	os.Exit(0)
 }
@@ -700,7 +727,7 @@ func preloadModel(modelName string) {
 
 // Stop Ollama on shutdown
 func stopOllama() {
-	// 1) Graceful shutdown of your child process
+	// 1) Graceful shutdown of child process
 	if ollamaCmd != nil && ollamaCmd.Process != nil {
 		// send interrupt
 		_ = ollamaCmd.Process.Signal(os.Interrupt)
