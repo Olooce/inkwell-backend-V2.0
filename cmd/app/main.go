@@ -549,7 +549,7 @@ func initRouter(cfg *config.APIConfig) *gin.Engine {
 //
 
 func runServer(cfg *config.APIConfig, router *gin.Engine) {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	addr := fmt.Sprintf("%s:%d", cfg.Context.Host, cfg.Context.Port)
