@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -699,38 +700,91 @@ func preloadModel(modelName string) {
 
 // Stop Ollama on shutdown
 func stopOllama() {
-	if ollamaCmd == nil {
-		log.Println("Ollama is not running.")
-		return
+	// 1) Graceful shutdown of your child process
+	if ollamaCmd != nil && ollamaCmd.Process != nil {
+		// send interrupt
+		_ = ollamaCmd.Process.Signal(os.Interrupt)
+
+		// wait up to 5s
+		done := make(chan error, 1)
+		go func() { done <- ollamaCmd.Wait() }()
+		select {
+		case err := <-done:
+			if err != nil {
+				log.Printf("Ollama exited with error: %v", err)
+			} else {
+				log.Println("Ollama exited cleanly.")
+			}
+		case <-time.After(5 * time.Second):
+			if err := ollamaCmd.Process.Kill(); err != nil {
+				log.Printf("Failed to kill Ollama gracefully: %v", err)
+			} else {
+				log.Println("Ollama force‑killed.")
+			}
+		}
+		ollamaCmd = nil
 	}
 
-	var command string
-	var args []string
+	// 2) Fallback: find any remaining Ollama PIDs and kill them
+	pids, err := listOllama()
+	if err != nil {
+		log.Printf("Could not list Ollama processes: %v", err)
+		return
+	}
+	if len(pids) == 0 {
+		log.Println("No stray Ollama processes found.")
+		return
+	}
+	for _, pid := range pids {
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			log.Printf("FindProcess(%d) failed: %v", pid, err)
+			continue
+		}
+		if err := proc.Kill(); err != nil {
+			log.Printf("Failed to kill PID %d: %v", pid, err)
+		} else {
+			log.Printf("Killed stray Ollama PID %d", pid)
+		}
+	}
+}
 
+// listOllama returns PIDs of any running ‘ollama’ processes.
+func listOllama() ([]int, error) {
+	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		command = "taskkill"
-		args = []string{"/F", "/IM", "ollama.exe"}
+		cmd = exec.Command("tasklist", "/FI", "IMAGENAME eq ollama.exe", "/NH", "/FO", "CSV")
 	case "darwin", "linux":
-		command = "pkill"
-		args = []string{"-f", "ollama"}
+		cmd = exec.Command("pgrep", "-f", "ollama")
 	default:
-		log.Println("Unsupported OS for stopping Ollama")
-		return
+		return nil, fmt.Errorf("unsupported OS")
 	}
 
-	stopCmd := exec.Command(command, args...)
-	stopCmd.Stdout = os.Stdout
-	stopCmd.Stderr = os.Stderr
-
-	err := stopCmd.Run()
-	if err != nil {
-		log.Printf("Failed to stop Ollama: %v", err)
-		return
+	out, err := cmd.CombinedOutput()
+	if err != nil && len(out) == 0 {
+		return nil, err
 	}
 
-	ollamaCmd = nil
-	log.Println("Ollama stopped successfully")
+	var pids []int
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if runtime.GOOS == "windows" {
+			parts := strings.Split(line, "\",\"")
+			if len(parts) >= 2 {
+				pidStr := strings.Trim(parts[1], `"`)
+				if pid, err := strconv.Atoi(pidStr); err == nil {
+					pids = append(pids, pid)
+				}
+			}
+		} else {
+			if pid, err := strconv.Atoi(strings.TrimSpace(line)); err == nil {
+				pids = append(pids, pid)
+			}
+		}
+	}
+	return pids, scanner.Err()
 }
 
 func isOllamaInstalled() bool {

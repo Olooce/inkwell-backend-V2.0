@@ -21,6 +21,8 @@ var (
 	errorFile *os.File
 )
 
+// Some really great stuff going on here @michaelamimo
+
 func SetupLogging(logDir string) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		log.Fatalf("Failed to create log directory: %v", err)
