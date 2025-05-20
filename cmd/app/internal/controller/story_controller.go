@@ -1,12 +1,12 @@
 package controller
 
 import (
+	"inkwell-backend-V2.0/cmd/app/internal/service"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"inkwell-backend-V2.0/cmd/internal/service"
 )
 
 type StoryController struct {

@@ -3,7 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"inkwell-backend-V2.0/cmd/internal/config"
+	"inkwell-backend-V2.0/cmd/app/internal/config"
 	"log"
 	"time"
 

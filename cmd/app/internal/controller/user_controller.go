@@ -1,10 +1,10 @@
 package controller
 
 import (
+	"inkwell-backend-V2.0/cmd/app/internal/service"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"inkwell-backend-V2.0/cmd/internal/service"
 )
 
 type UserController struct {

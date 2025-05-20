@@ -3,9 +3,9 @@ package service
 import (
 	"encoding/base64"
 	"fmt"
-	"inkwell-backend-V2.0/cmd/internal/model"
-	"inkwell-backend-V2.0/cmd/internal/repository"
-	"inkwell-backend-V2.0/cmd/utilities"
+	"inkwell-backend-V2.0/cmd/app/internal/model"
+	"inkwell-backend-V2.0/cmd/app/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/utilities"
 	"log"
 	"os"
 	"path/filepath"

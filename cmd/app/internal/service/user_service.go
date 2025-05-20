@@ -1,8 +1,8 @@
 package service
 
 import (
-	"inkwell-backend-V2.0/cmd/internal/model"
-	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/internal/model"
+	"inkwell-backend-V2.0/cmd/app/internal/repository"
 )
 
 type UserService interface {

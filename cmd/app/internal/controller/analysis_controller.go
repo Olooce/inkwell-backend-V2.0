@@ -1,13 +1,13 @@
 package controller
 
 import (
-	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/internal/db"
+	"inkwell-backend-V2.0/cmd/app/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/internal/service"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"inkwell-backend-V2.0/cmd/internal/db"
-	"inkwell-backend-V2.0/cmd/internal/service"
 )
 
 type AnalysisController struct {

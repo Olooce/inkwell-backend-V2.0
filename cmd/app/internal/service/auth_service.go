@@ -7,9 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
-	"inkwell-backend-V2.0/cmd/internal/model"
-	"inkwell-backend-V2.0/cmd/internal/repository"
-	"inkwell-backend-V2.0/cmd/utilities"
+	"inkwell-backend-V2.0/cmd/app/internal/model"
+	"inkwell-backend-V2.0/cmd/app/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/utilities"
 )
 
 // AuthService interface

@@ -2,16 +2,16 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
-	"inkwell-backend-V2.0/cmd/internal/service"
+	service2 "inkwell-backend-V2.0/cmd/app/internal/service"
 	"net/http"
 )
 
 func RegisterRoutes(
 	r *gin.Engine,
-	authService service.AuthService,
-	userService service.UserService,
-	assessmentService service.AssessmentService,
-	storyService service.StoryService,
+	authService service2.AuthService,
+	userService service2.UserService,
+	assessmentService service2.AssessmentService,
+	storyService service2.StoryService,
 ) {
 	// Auth routes.
 	authCtrl := NewAuthController(authService)

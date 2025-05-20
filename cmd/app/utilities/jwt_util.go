@@ -3,8 +3,8 @@ package utilities
 import (
 	"errors"
 	"fmt"
-	"inkwell-backend-V2.0/cmd/internal/config"
-	"inkwell-backend-V2.0/cmd/internal/model"
+	"inkwell-backend-V2.0/cmd/app/internal/config"
+	"inkwell-backend-V2.0/cmd/app/internal/model"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"

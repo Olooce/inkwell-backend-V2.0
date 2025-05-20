@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"inkwell-backend-V2.0/cmd/internal/llm"
-	"inkwell-backend-V2.0/cmd/internal/model"
-	"inkwell-backend-V2.0/cmd/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/internal/llm"
+	"inkwell-backend-V2.0/cmd/app/internal/model"
+	"inkwell-backend-V2.0/cmd/app/internal/repository"
 )
 
 type AssessmentService interface {

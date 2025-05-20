@@ -2,9 +2,8 @@ package service
 
 import (
 	"fmt"
-	"inkwell-backend-V2.0/cmd/internal/model"
-
 	"gorm.io/gorm"
+	"inkwell-backend-V2.0/cmd/app/internal/model"
 )
 
 // ProgressData holds the metrics for the progress report.

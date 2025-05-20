@@ -1,14 +1,14 @@
 package controller
 
 import (
+	"inkwell-backend-V2.0/cmd/app/internal/model"
+	"inkwell-backend-V2.0/cmd/app/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/internal/service"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"inkwell-backend-V2.0/cmd/internal/model"
-	"inkwell-backend-V2.0/cmd/internal/repository"
-	"inkwell-backend-V2.0/cmd/internal/service"
 	"math/rand"
 )
 
