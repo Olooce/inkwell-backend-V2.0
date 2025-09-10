@@ -72,21 +72,21 @@ func RegisterRoutes(
 		chatRoutes.GET("/health", chatCtrl.ChatHealth)
 	}
 
-	// API routes for frontend compatibility
-	apiRoutes := r.Group("/api")
-	{
-		// Mirror chat routes under /api for frontend
-		apiChatRoutes := apiRoutes.Group("/chat")
-		{
-			apiChatRoutes.POST("/stream", chatCtrl.StreamChat)
-			apiChatRoutes.GET("/writing-tip", chatCtrl.GetWritingTip)
-			apiChatRoutes.GET("/story-idea", chatCtrl.GetStoryIdea)
-			apiChatRoutes.POST("/improve-text", chatCtrl.ImproveText)
-			chatRoutes.POST("/speech-to-text", chatCtrl.SpeechToText)
-			chatRoutes.POST("/text-to-speech", chatCtrl.TextToSpeech)
-			apiChatRoutes.GET("/health", chatCtrl.ChatHealth)
-		}
-	}
+	//// API routes for frontend compatibility
+	//apiRoutes := r.Group("/api")
+	//{
+	//	// Mirror chat routes under /api for frontend
+	//	apiChatRoutes := apiRoutes.Group("/chat")
+	//	{
+	//		apiChatRoutes.POST("/stream", chatCtrl.StreamChat)
+	//		apiChatRoutes.GET("/writing-tip", chatCtrl.GetWritingTip)
+	//		apiChatRoutes.GET("/story-idea", chatCtrl.GetStoryIdea)
+	//		apiChatRoutes.POST("/improve-text", chatCtrl.ImproveText)
+	//		chatRoutes.POST("/speech-to-text", chatCtrl.SpeechToText)
+	//		chatRoutes.POST("/text-to-speech", chatCtrl.TextToSpeech)
+	//		apiChatRoutes.GET("/health", chatCtrl.ChatHealth)
+	//	}
+	//}
 
 	// Static routes.
 	staticCtrl := NewStaticController()
