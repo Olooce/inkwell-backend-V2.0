@@ -3,11 +3,12 @@ package main
 //
 //import (
 //	"fmt"
-//	"inkwell-backend-V2.0/internal/config"
-//	"inkwell-backend-V2.0/internal/db"
-//	"inkwell-backend-V2.0/internal/model"
-//	"inkwell-backend-V2.0/internal/repository"
 //	"log"
+//
+//	"inkwell-backend-V2.0/cmd/app/internal/config"
+//	"inkwell-backend-V2.0/cmd/app/internal/db"
+//	"inkwell-backend-V2.0/cmd/app/internal/model"
+//	"inkwell-backend-V2.0/cmd/app/internal/repository"
 //)
 //
 //func main() {

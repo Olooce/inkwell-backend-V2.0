@@ -6,15 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
-	"inkwell-backend-V2.0/cmd/app/internal/config"
-	"inkwell-backend-V2.0/cmd/app/internal/controller"
-	"inkwell-backend-V2.0/cmd/app/internal/db"
-	"inkwell-backend-V2.0/cmd/app/internal/llm"
-	"inkwell-backend-V2.0/cmd/app/internal/model"
-	"inkwell-backend-V2.0/cmd/app/internal/repository"
-	"inkwell-backend-V2.0/cmd/app/internal/service"
-	"inkwell-backend-V2.0/cmd/app/utilities"
 	"io"
 	"log"
 	"net/http"
@@ -27,6 +18,16 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/net/context"
+	"inkwell-backend-V2.0/cmd/app/internal/config"
+	"inkwell-backend-V2.0/cmd/app/internal/controller"
+	"inkwell-backend-V2.0/cmd/app/internal/db"
+	"inkwell-backend-V2.0/cmd/app/internal/llm"
+	"inkwell-backend-V2.0/cmd/app/internal/model"
+	"inkwell-backend-V2.0/cmd/app/internal/repository"
+	"inkwell-backend-V2.0/cmd/app/internal/service"
+	"inkwell-backend-V2.0/cmd/app/utilities"
 
 	"github.com/common-nighthawk/go-figure"
 	"github.com/gin-gonic/gin"
@@ -64,7 +65,7 @@ func main() {
 	r := initRouter(cfg)
 
 	// Register API routes.
-	controller.RegisterRoutes(r, authService, userService, assessmentService, storyService)
+	controller.RegisterRoutes(r, authService, userService, assessmentService, storyService, ollamaClient)
 
 	// Start server and listen for termination signals.
 	runServer(cfg, r)
@@ -94,6 +95,7 @@ func initAuth(cfg *config.APIConfig) {
 func initThirdPartyClients(cfg *config.APIConfig) {
 	// Initialize Stable Diffusion wrapper.
 	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
+
 	// Determine Ollama host.
 	ollamaHost := cfg.ThirdParty.OllamaHost
 	if ollamaHost == "" {
@@ -604,7 +606,7 @@ func printStartUpBanner() {
 	myFigure := figure.NewFigure("INKWELL", "", true)
 	myFigure.Print()
 
-	fmt.Println("======================================================")
+	fmt.Println("===========================================================")
 	fmt.Printf("INKWELL API (v%s)\n\n", "2.0.0-StoryScape")
 }
 

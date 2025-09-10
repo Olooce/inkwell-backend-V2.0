@@ -1,7 +1,9 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +26,103 @@ func NewOllamaClient(url string) *OllamaClient {
 			Timeout: 600 * time.Second, // Set a timeout to avoid hanging requests
 		},
 	}
+}
+
+// StreamResponse represents a streaming response chunk from Ollama
+type StreamResponse struct {
+	Model     string `json:"model"`
+	CreatedAt string `json:"created_at"`
+	Response  string `json:"response"`
+	Done      bool   `json:"done"`
+	Context   []int  `json:"context,omitempty"`
+}
+
+// StreamCallback defines the callback function type for streaming responses
+type StreamCallback func(response string, done bool) error
+
+// StreamChat sends a prompt to Ollama and streams the response via callback
+func (o *OllamaClient) StreamChat(ctx context.Context, prompt string, callback StreamCallback) error {
+	requestBody, err := json.Marshal(map[string]interface{}{
+		"model":  "mistral",
+		"prompt": prompt,
+		"stream": true, // Enable streaming
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", o.ollamaURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP error: %d", resp.StatusCode)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		var streamResp StreamResponse
+		if err := json.Unmarshal([]byte(line), &streamResp); err != nil {
+			log.Printf("Failed to unmarshal stream response: %v", err)
+			continue
+		}
+
+		// Call the callback with the response chunk
+		if err := callback(streamResp.Response, streamResp.Done); err != nil {
+			return fmt.Errorf("callback error: %w", err)
+		}
+
+		if streamResp.Done {
+			break
+		}
+	}
+
+	return scanner.Err()
+}
+
+// StreamChatWithConversation maintains conversation context for better responses
+func (o *OllamaClient) StreamChatWithConversation(ctx context.Context, messages []ChatMessage, callback StreamCallback) error {
+	// Build conversation prompt
+	var conversationBuilder strings.Builder
+	conversationBuilder.WriteString("You are a helpful AI writing assistant for a creative writing application called Inkwell. ")
+	conversationBuilder.WriteString("You help users with writing tips, grammar, story ideas, and creative writing. ")
+	conversationBuilder.WriteString("Be friendly, encouraging, and provide practical advice.\n\n")
+
+	for _, msg := range messages {
+		if msg.Role == "user" {
+			conversationBuilder.WriteString("User: " + msg.Content + "\n")
+		} else if msg.Role == "assistant" {
+			conversationBuilder.WriteString("Assistant: " + msg.Content + "\n")
+		}
+	}
+	conversationBuilder.WriteString("Assistant: ")
+
+	return o.StreamChat(ctx, conversationBuilder.String(), callback)
+}
+
+// ChatMessage represents a message in a conversation
+type ChatMessage struct {
+	Role    string `json:"role"` // "user" or "assistant"
+	Content string `json:"content"`
 }
 
 func (o *OllamaClient) callOllama(prompt string) (string, error) {
@@ -194,4 +293,22 @@ func (o *OllamaClient) AnalyzeText(prompt string) (*AnalysisResponse, error) {
 		return nil, fmt.Errorf("failed to parse analysis response: %w", err)
 	}
 	return &analysisResp, nil
+}
+
+// GenerateWritingTip generates a writing tip based on user's request
+func (o *OllamaClient) GenerateWritingTip(topic string) (string, error) {
+	prompt := fmt.Sprintf("Provide a helpful writing tip about %s. Keep it concise and actionable.", topic)
+	return o.callOllama(prompt)
+}
+
+// GenerateStoryIdea generates creative story ideas
+func (o *OllamaClient) GenerateStoryIdea(genre, theme string) (string, error) {
+	prompt := fmt.Sprintf("Generate a creative story idea for the %s genre with the theme of %s. Include a brief plot outline.", genre, theme)
+	return o.callOllama(prompt)
+}
+
+// ImproveWriting provides suggestions to improve a piece of writing
+func (o *OllamaClient) ImproveWriting(text string) (string, error) {
+	prompt := fmt.Sprintf("Review the following text and provide constructive feedback on how to improve it:\n\n%s", text)
+	return o.callOllama(prompt)
 }
