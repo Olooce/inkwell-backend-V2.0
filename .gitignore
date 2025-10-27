@@ -11,8 +11,8 @@ db.properties
 Thumbs.db
 cmake-build-debug
 config.xml
-/cmd/app/internal/llm/deepfloyd_env/*
-!/cmd/app/internal/llm/deepfloyd_env/.keep
+/internal/llm/deepfloyd_env/*
+!/internal/llm/deepfloyd_env/.keep
 
 
 # Ignore all files under working

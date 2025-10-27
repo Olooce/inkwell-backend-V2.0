@@ -45,4 +45,13 @@
         <HF_TOKEN TYPE="WRITE">****</HF_TOKEN>
         <OLLAMA_HOST>http://localhost:11434</OLLAMA_HOST>
     </THIRD_PARTY>
+
+
+    <LOGGING>
+        <LOG_DIR RELATIVE="true">/logs</LOG_DIR>
+        <MAX_SIZE_MB>10</MAX_SIZE_MB>
+        <MAX_BACKUPS>5</MAX_BACKUPS>
+        <MAX_AGE_DAYS>28</MAX_AGE_DAYS>
+        <COMPRESS_LOGS>true</COMPRESS_LOGS>
+    </LOGGING>
 </API>
