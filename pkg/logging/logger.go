@@ -35,9 +35,18 @@ type LoggingOptions struct {
 }
 
 func SetupLogging(cfg LoggingOptions) {
-	logDir := strings.TrimPrefix(cfg.LogDir.Path, string(os.PathSeparator))
+	logDir := cfg.LogDir.Path
 
-	if cfg.LogDir.Relative && !filepath.IsAbs(logDir) {
+	if cfg.LogDir.Relative {
+		// Ensure path is relative to working directory
+		logDir = strings.TrimPrefix(logDir, string(os.PathSeparator))
+		cwd, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("Failed to get working directory: %v", err)
+		}
+		logDir = filepath.Join(cwd, logDir)
+	} else if !filepath.IsAbs(logDir) {
+		// If not explicitly relative but not absolute, make it absolute
 		cwd, err := os.Getwd()
 		if err != nil {
 			log.Fatalf("Failed to get working directory: %v", err)
