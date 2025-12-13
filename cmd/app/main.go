@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -38,10 +39,11 @@ import (
 )
 
 var (
-	ollamaCmd        *exec.Cmd // Store the Ollama process
-	diffussionClient *llm.StableDiffusionWrapper
-	ollamaClient     *llm.OllamaClient
-	wg               = &sync.WaitGroup{}
+	ollamaCmd       *exec.Cmd // Store the Ollama process
+	sttTtsCmd       *exec.Cmd
+	diffusionClient *llm.StableDiffusionWrapper
+	ollamaClient    *llm.OllamaClient
+	wg              = &sync.WaitGroup{}
 )
 
 func main() {
@@ -50,6 +52,16 @@ func main() {
 	cfg := loadConfig("config.xml")
 
 	debugMode := cfg.Context.Mode != gin.ReleaseMode
+
+	if cfg.Logging.MaxSizeMB <= 0 {
+		log.Printf("Invalid MAX_SIZE_MB in config, must be > 0")
+		os.Exit(1)
+	}
+	if cfg.Logging.MaxBackups < 0 || cfg.Logging.MaxAgeDays < 0 {
+		log.Printf("Invalid MAX_BACKUPS or MAX_AGE_DAYS in config, must be >= 0")
+		os.Exit(1)
+	}
+
 	Log.SetupLogging(Log.LoggingOptions{
 		LogDir: struct {
 			Path     string
@@ -110,8 +122,18 @@ func initAuth(cfg *config.APIConfig) {
 }
 
 func initThirdPartyClients(cfg *config.APIConfig) {
+	err := startSTTTTS(cfg)
+	if err != nil {
+		Log.Error("Failed to start STT/TTS service: %v", err)
+		os.Exit(1)
+	}
+	if err := waitForSTTTTS(); err != nil {
+		Log.Error("STT/TTS service failed to become ready: %v", err)
+		os.Exit(1)
+	}
+
 	// Initialize Stable Diffusion wrapper.
-	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
+	diffusionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
 
 	// Determine Ollama host.
 	ollamaHost := cfg.ThirdParty.OllamaHost
@@ -184,7 +206,7 @@ func createServices(userRepo repository.UserRepository, assessmentRepo repositor
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
-	storyService := service.NewStoryService(storyRepo, ollamaClient, diffussionClient)
+	storyService := service.NewStoryService(storyRepo, ollamaClient, diffusionClient)
 	return authService, userService, assessmentService, storyService
 }
 
@@ -229,6 +251,7 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 		defer wg.Done()
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			Log.Error("Server failed: %v", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -239,6 +262,7 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 
 	//cancel any background work
 	cancel()
+	stopSTTTTS()
 	stopOllama()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -247,7 +271,7 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 		Log.Warn("HTTP server shutdown error: %v", err)
 	}
 
-	//wait for your goroutines, but force‑exit after 5s
+	//wait for goroutines, but force‑exit after 5s
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -416,12 +440,9 @@ func preloadModel(modelName string) {
 
 // Stop Ollama on shutdown
 func stopOllama() {
-	// 1) Graceful shutdown of child process
 	if ollamaCmd != nil && ollamaCmd.Process != nil {
-		// send interrupt
 		_ = ollamaCmd.Process.Signal(os.Interrupt)
 
-		// wait up to 5s
 		done := make(chan error, 1)
 		go func() { done <- ollamaCmd.Wait() }()
 		select {
@@ -441,7 +462,6 @@ func stopOllama() {
 		ollamaCmd = nil
 	}
 
-	// 2) Fallback: find any remaining Ollama PIDs and kill them
 	pids, err := listOllama()
 	if err != nil {
 		log.Printf("Could not list Ollama processes: %v", err)
@@ -465,7 +485,7 @@ func stopOllama() {
 	}
 }
 
-// listOllama returns PIDs of any running ‘ollama’ processes.
+// listOllama returns PIDs of any running 'ollama' processes.
 func listOllama() ([]int, error) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -517,4 +537,144 @@ func isOllamaInstalled() bool {
 		return false
 	}
 	return true
+}
+
+// startSTTTTS starts the STT/TTS Python service using an absolute path to the script.
+// This prevents failures when the process CWD differs from the expected location.
+func startSTTTTS(cfg *config.APIConfig) error {
+	// Try multiple strategies to locate the script:
+	// 1. From current working directory (for development/IDE runs)
+	// 2. From executable directory (for production deployments)
+
+	var scriptPath string
+	var err error
+
+	// Strategy 1: Check working directory first
+	cwd, err := os.Getwd()
+	if err == nil {
+		candidatePath := filepath.Join(cwd, "internal", "service", "tts-stt", "tts-stt.py")
+		if _, err := os.Stat(candidatePath); err == nil {
+			scriptPath = candidatePath
+		}
+	}
+
+	// Strategy 2: If not found, try executable directory
+	if scriptPath == "" {
+		exePath, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("failed to get executable path: %w", err)
+		}
+		// Follow symlinks if present
+		exePath, err = filepath.EvalSymlinks(exePath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve executable symlinks: %w", err)
+		}
+		exeDir := filepath.Dir(exePath)
+		candidatePath := filepath.Join(exeDir, "internal", "service", "tts-stt", "tts-stt.py")
+		if _, err := os.Stat(candidatePath); err == nil {
+			scriptPath = candidatePath
+		}
+	}
+
+	// If still not found, return error
+	if scriptPath == "" {
+		return fmt.Errorf("STT/TTS script not found in working directory or executable directory")
+	}
+
+	cmd := exec.Command(cfg.Context.PythonVenv, scriptPath)
+
+	// Create pipes for standard output and error (similar to Ollama)
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start STT/TTS: %w", err)
+	}
+
+	// Process standard output logs
+	go processLogs(stdoutPipe, "[STT/TTS INFO]")
+
+	// Process error output logs
+	go processLogs(stderrPipe, "[STT/TTS ERROR]")
+
+	sttTtsCmd = cmd
+	Log.Info("STT/TTS service started with script at: %s", scriptPath)
+	return nil
+}
+
+// waitForSTTTTS polls the STT/TTS service health endpoint with timeout and bounded retries.
+// Returns an error if the service fails to become ready, causing startup to fail fast.
+func waitForSTTTTS() error {
+	// Create HTTP client with per-request timeout to prevent hanging
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+	}
+
+	maxRetries := 10
+	retryDelay := 1 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		resp, err := client.Get("http://localhost:8001/health")
+		if err == nil {
+			// Attempt to close response body, but don't abort on close error
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				Log.Debug("Failed to close STT/TTS health check response body: %v", closeErr)
+			}
+
+			if resp.StatusCode == 200 {
+				Log.Info("STT/TTS is now ready.")
+				return nil
+			}
+		}
+
+		Log.Info("Waiting for STT/TTS to start... (attempt %d/%d)", i+1, maxRetries)
+		time.Sleep(retryDelay)
+	}
+
+	return fmt.Errorf("STT/TTS service did not become ready after %d attempts", maxRetries)
+}
+
+// stopSTTTTS gracefully shuts down the STT/TTS service.
+// On Windows, os.Interrupt is not implemented, so we skip the signal attempt
+// and rely on the Kill fallback after the timeout. On Unix-like systems,
+// we attempt a graceful interrupt first.
+func stopSTTTTS() {
+	if sttTtsCmd != nil && sttTtsCmd.Process != nil {
+		// Windows doesn't support os.Interrupt for Process.Signal, so we skip
+		// the signal attempt and go straight to the timed wait/kill logic.
+		// On Unix-like systems, we attempt graceful shutdown via interrupt.
+		if runtime.GOOS != "windows" {
+			if err := sttTtsCmd.Process.Signal(os.Interrupt); err != nil {
+				Log.Debug("Failed to send interrupt to STT/TTS (expected on some platforms): %v", err)
+			}
+		} else {
+			Log.Debug("Skipping os.Interrupt on Windows (not supported); will rely on Kill fallback")
+		}
+
+		// Wait up to 5s for process to exit
+		done := make(chan error, 1)
+		go func() { done <- sttTtsCmd.Wait() }()
+		select {
+		case err := <-done:
+			if err != nil {
+				Log.Warn("STT/TTS exited with error: %v", err)
+			} else {
+				Log.Info("STT/TTS exited gracefully.")
+			}
+		case <-time.After(5 * time.Second):
+			// Timeout reached, force kill the process
+			if err := sttTtsCmd.Process.Kill(); err != nil {
+				Log.Warn("Failed to kill STT/TTS gracefully: %v", err)
+			} else {
+				Log.Info("STT/TTS force-killed.")
+			}
+		}
+		sttTtsCmd = nil
+	}
 }

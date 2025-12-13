@@ -1,11 +1,10 @@
-from concurrent.futures import ThreadPoolExecutor
-
 import asyncio
 import logging
 import os
 import subprocess
 import tempfile
-import torch
+from concurrent.futures import ThreadPoolExecutor
+
 from TTS.api import TTS
 from fastapi import FastAPI, UploadFile, HTTPException, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -189,6 +188,11 @@ async def text_to_speech_stream(text: str = Form(...)):
             os.remove(chunk_wav)
             os.remove(chunk_mp3)
     return StreamingResponse(audio_generator(), media_type="audio/mpeg")
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 
 if __name__ == "__main__":
     import uvicorn
