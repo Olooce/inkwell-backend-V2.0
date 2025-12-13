@@ -575,7 +575,24 @@ func waitForSTTTTS() {
 func stopSTTTTS() {
 	if sttTtsCmd != nil && sttTtsCmd.Process != nil {
 		_ = sttTtsCmd.Process.Signal(os.Interrupt)
-		sttTtsCmd.Wait()
-		log.Println("STT/TTS stopped")
+		
+		// Wait up to 5s
+		done := make(chan error, 1)
+		go func() { done <- sttTtsCmd.Wait() }()
+		select {
+		case err := <-done:
+			if err != nil {
+				Log.Warn("STT/TTS exited with error: %v", err)
+			} else {
+				Log.Info("STT/TTS exited gracefully.")
+			}
+		case <-time.After(5 * time.Second):
+			if err := sttTtsCmd.Process.Kill(); err != nil {
+				Log.Warn("Failed to kill STT/TTS gracefully: %v", err)
+			} else {
+				Log.Info("STT/TTS force-killed.")
+			}
+		}
+		sttTtsCmd = nil
 	}
 }
