@@ -38,6 +38,7 @@ type ContextConfig struct {
 	EnableBasicAuth bool                 `xml:"ENABLE_BASIC_AUTH"`
 	Mode            string               `xml:"MODE"` // "release" or "debug"
 	TrustedProxies  TrustedProxiesConfig `xml:"TRUSTED_PROXIES"`
+	PythonVenv      string               `xml:"PYTHON_VENV"`
 }
 
 // TrustedProxiesConfig holds a list of trusted proxy IP addresses.

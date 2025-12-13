@@ -39,6 +39,7 @@ import (
 
 var (
 	ollamaCmd        *exec.Cmd // Store the Ollama process
+	sttTtsCmd        *exec.Cmd
 	diffussionClient *llm.StableDiffusionWrapper
 	ollamaClient     *llm.OllamaClient
 	wg               = &sync.WaitGroup{}
@@ -120,6 +121,9 @@ func initAuth(cfg *config.APIConfig) {
 }
 
 func initThirdPartyClients(cfg *config.APIConfig) {
+	startSTTTTS(cfg)
+	waitForSTTTTS()
+
 	// Initialize Stable Diffusion wrapper.
 	diffussionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
 
@@ -250,6 +254,7 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 
 	//cancel any background work
 	cancel()
+	stopSTTTTS()
 	stopOllama()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -528,4 +533,38 @@ func isOllamaInstalled() bool {
 		return false
 	}
 	return true
+}
+
+func startSTTTTS(cfg *config.APIConfig) error {
+	cmd := exec.Command(cfg.Context.PythonVenv, "internal/service/tts-stt/tts-stt.py")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	sttTtsCmd = cmd
+	log.Println("STT/TTS service started")
+	return nil
+}
+
+func waitForSTTTTS() {
+	for i := 0; i < 10; i++ {
+		resp, err := http.Get("http://localhost:8001/health")
+		if err == nil && resp.StatusCode == 200 {
+			log.Println("STT/TTS ready")
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+	log.Fatal("STT/TTS did not start")
+}
+
+func stopSTTTTS() {
+	if sttTtsCmd != nil && sttTtsCmd.Process != nil {
+		_ = sttTtsCmd.Process.Signal(os.Interrupt)
+		sttTtsCmd.Wait()
+		log.Println("STT/TTS stopped")
+	}
 }

@@ -6,6 +6,7 @@
         <PATH>/</PATH>
         <TIME_ZONE>Africa/Nairobi</TIME_ZONE>
         <ENABLE_BASIC_AUTH>true</ENABLE_BASIC_AUTH>
+        <PYTHON_VENV>/inkwell-backend-V2.0/.venv/bin/python</PYTHON_VENV>
         <MODE>release</MODE>
         <TRUSTED_PROXIES>
             <PROXY>127.0.0.1</PROXY>

@@ -190,6 +190,11 @@ async def text_to_speech_stream(text: str = Form(...)):
             os.remove(chunk_mp3)
     return StreamingResponse(audio_generator(), media_type="audio/mpeg")
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
