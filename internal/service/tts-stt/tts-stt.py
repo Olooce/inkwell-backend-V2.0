@@ -1,11 +1,10 @@
-from concurrent.futures import ThreadPoolExecutor
-
 import asyncio
 import logging
 import os
 import subprocess
 import tempfile
-import torch
+from concurrent.futures import ThreadPoolExecutor
+
 from TTS.api import TTS
 from fastapi import FastAPI, UploadFile, HTTPException, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
