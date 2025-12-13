@@ -556,13 +556,20 @@ func startSTTTTS(cfg *config.APIConfig) error {
 func waitForSTTTTS() {
 	for i := 0; i < 10; i++ {
 		resp, err := http.Get("http://localhost:8001/health")
-		if err == nil && resp.StatusCode == 200 {
-			log.Println("STT/TTS ready")
-			return
+		if err == nil {
+			err := resp.Body.Close()
+			if err != nil {
+				return
+			}
+			if resp.StatusCode == 200 {
+				Log.Info("STT/TTS is now ready.")
+				return
+			}
 		}
+		Log.Info("Waiting for STT/TTS to start...")
 		time.Sleep(1 * time.Second)
 	}
-	log.Fatal("STT/TTS did not start")
+	Log.Error("STT/TTS did not start in time.")
 }
 
 func stopSTTTTS() {
