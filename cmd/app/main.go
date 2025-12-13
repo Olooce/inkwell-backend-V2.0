@@ -53,11 +53,11 @@ func main() {
 	debugMode := cfg.Context.Mode != gin.ReleaseMode
 
 	if cfg.Logging.MaxSizeMB <= 0 {
-		Log.Error("Invalid MAX_SIZE_MB in config, must be > 0")
+		log.Printf("Invalid MAX_SIZE_MB in config, must be > 0")
 		os.Exit(1)
 	}
 	if cfg.Logging.MaxBackups < 0 || cfg.Logging.MaxAgeDays < 0 {
-		Log.Error("Invalid MAX_BACKUPS or MAX_AGE_DAYS in config, must be >= 0")
+		log.Printf("Invalid MAX_BACKUPS or MAX_AGE_DAYS in config, must be >= 0")
 		os.Exit(1)
 	}
 
