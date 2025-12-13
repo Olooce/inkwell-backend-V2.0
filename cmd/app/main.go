@@ -549,7 +549,7 @@ func startSTTTTS(cfg *config.APIConfig) error {
 	}
 
 	sttTtsCmd = cmd
-	log.Println("STT/TTS service started")
+	Log.Info("STT/TTS service started")
 	return nil
 }
 
