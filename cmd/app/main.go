@@ -121,7 +121,11 @@ func initAuth(cfg *config.APIConfig) {
 }
 
 func initThirdPartyClients(cfg *config.APIConfig) {
-	startSTTTTS(cfg)
+	err := startSTTTTS(cfg)
+	if err != nil {
+		Log.Error("Failed to start STT/TTS service: %v", err)
+		os.Exit(1)
+	}
 	waitForSTTTTS()
 
 	// Initialize Stable Diffusion wrapper.
