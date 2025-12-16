@@ -41,7 +41,7 @@ einops==0.8.1
 encodec==0.1.1
 fastapi==0.124.4
 faster-whisper==1.2.1
-filelock==3.20.0
+filelock==3.20.1
 Flask==3.1.2
 flatbuffers==25.9.23
 fonttools==4.61.1
