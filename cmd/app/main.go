@@ -260,8 +260,8 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 	<-signalChan
 	Log.Info("Received termination signal. Shutting down gracefully...")
 
-	//cancel any background work
 	cancel()
+
 	stopSTTTTS()
 	stopOllama()
 
@@ -338,6 +338,11 @@ func startOllama() {
 	}
 
 	ollamaCmd = exec.Command(command, args...)
+
+	// Sets process group so we can kill the whole tree
+	if runtime.GOOS != "windows" {
+		ollamaCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
 
 	// Create pipes for standard output and error.
 	stdoutPipe, err := ollamaCmd.StdoutPipe()
@@ -441,23 +446,34 @@ func preloadModel(modelName string) {
 // Stop Ollama on shutdown
 func stopOllama() {
 	if ollamaCmd != nil && ollamaCmd.Process != nil {
-		_ = ollamaCmd.Process.Signal(os.Interrupt)
+		pid := ollamaCmd.Process.Pid
+
+		if runtime.GOOS != "windows" {
+			// Kill the entire process group (negative PID = process group)
+			if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
+				Log.Warn("Failed to SIGTERM Ollama process group: %v", err)
+			}
+		} else {
+			_ = ollamaCmd.Process.Signal(os.Interrupt)
+		}
 
 		done := make(chan error, 1)
 		go func() { done <- ollamaCmd.Wait() }()
 		select {
 		case err := <-done:
 			if err != nil {
-				log.Printf("Ollama exited with error: %v", err)
+				log.Printf("Ollama exited with: %v", err)
 			} else {
 				log.Println("Ollama exited gracefully.")
 			}
 		case <-time.After(5 * time.Second):
-			if err := ollamaCmd.Process.Kill(); err != nil {
-				log.Printf("Failed to kill Ollama gracefully: %v", err)
+			// Force kill the process group
+			if runtime.GOOS != "windows" {
+				_ = syscall.Kill(-pid, syscall.SIGKILL)
 			} else {
-				log.Println("Ollama force‑killed.")
+				_ = ollamaCmd.Process.Kill()
 			}
+			log.Println("Ollama force-killed.")
 		}
 		ollamaCmd = nil
 	}
@@ -583,6 +599,10 @@ func startSTTTTS(cfg *config.APIConfig) error {
 
 	cmd := exec.Command(cfg.Context.PythonVenv, scriptPath)
 
+	if runtime.GOOS != "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
+
 	// Create pipes for standard output and error (similar to Ollama)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -640,41 +660,35 @@ func waitForSTTTTS() error {
 	return fmt.Errorf("STT/TTS service did not become ready after %d attempts", maxRetries)
 }
 
-// stopSTTTTS gracefully shuts down the STT/TTS service.
-// On Windows, os.Interrupt is not implemented, so we skip the signal attempt
-// and rely on the Kill fallback after the timeout. On Unix-like systems,
-// we attempt a graceful interrupt first.
 func stopSTTTTS() {
-	if sttTtsCmd != nil && sttTtsCmd.Process != nil {
-		// Windows doesn't support os.Interrupt for Process.Signal, so we skip
-		// the signal attempt and go straight to the timed wait/kill logic.
-		// On Unix-like systems, we attempt graceful shutdown via interrupt.
-		if runtime.GOOS != "windows" {
-			if err := sttTtsCmd.Process.Signal(os.Interrupt); err != nil {
-				Log.Debug("Failed to send interrupt to STT/TTS (expected on some platforms): %v", err)
-			}
-		} else {
-			Log.Debug("Skipping os.Interrupt on Windows (not supported); will rely on Kill fallback")
-		}
-
-		// Wait up to 5s for process to exit
-		done := make(chan error, 1)
-		go func() { done <- sttTtsCmd.Wait() }()
-		select {
-		case err := <-done:
-			if err != nil {
-				Log.Warn("STT/TTS exited with error: %v", err)
-			} else {
-				Log.Info("STT/TTS exited gracefully.")
-			}
-		case <-time.After(5 * time.Second):
-			// Timeout reached, force kill the process
-			if err := sttTtsCmd.Process.Kill(); err != nil {
-				Log.Warn("Failed to kill STT/TTS gracefully: %v", err)
-			} else {
-				Log.Info("STT/TTS force-killed.")
-			}
-		}
-		sttTtsCmd = nil
+	if sttTtsCmd == nil || sttTtsCmd.Process == nil {
+		return
 	}
+
+	pid := sttTtsCmd.Process.Pid
+
+	if runtime.GOOS != "windows" {
+		if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
+			Log.Warn("Failed to SIGTERM STT/TTS process group: %v", err)
+		}
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- sttTtsCmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			Log.Warn("STT/TTS exited with: %v", err)
+		} else {
+			Log.Info("STT/TTS exited gracefully.")
+		}
+	case <-time.After(5 * time.Second):
+		if runtime.GOOS != "windows" {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+		} else {
+			_ = sttTtsCmd.Process.Kill()
+		}
+		Log.Info("STT/TTS force-killed.")
+	}
+	sttTtsCmd = nil
 }
