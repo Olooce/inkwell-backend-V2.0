@@ -97,7 +97,7 @@ murmurhash==1.0.13
 mypy_extensions==1.1.0
 narwhals==2.13.0
 networkx==2.8.8
-nltk==3.9.3
+nltk==3.9.4
 nose2==0.15.1
 num2words==0.5.14
 numba==0.61.2
@@ -144,7 +144,7 @@ pytokens==0.3.0
 pytz==2025.2
 PyYAML==6.0.3
 regex==2025.9.1
-requests==2.32.5
+requests==2.33.0
 rich==14.1.0
 safetensors==0.6.2
 scikit-learn==1.7.2
