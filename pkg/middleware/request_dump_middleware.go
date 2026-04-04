@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 
+	Log "inkwell-backend-V2.0/pkg/logging"
+
 	"github.com/gin-gonic/gin"
-	"inkwell-backend-V2.0/pkg/logging"
 )
 
 func RequestDumpMiddleware() gin.HandlerFunc {
@@ -16,20 +18,52 @@ func RequestDumpMiddleware() gin.HandlerFunc {
 		}
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		logger.Debug(
-			"[Request]\n"+
-				"\tMethod: %s\n"+
-				"\tURL: %s\n"+
-				"\tHeaders: %v\n"+
-				"\tParams: %v\n"+
-				"\tBody: %s",
-			c.Request.Method,
-			c.Request.URL.String(),
-			c.Request.Header,
-			c.Params,
-			string(bodyBytes),
-		)
+		var b bytes.Buffer
+
+		b.WriteString("\n[Request]\n")
+
+		b.WriteString("  Method: " + c.Request.Method + "\n")
+		b.WriteString("  URL: " + c.Request.URL.String() + "\n")
+
+		b.WriteString("  Headers:\n")
+		for k, vals := range c.Request.Header {
+			for _, v := range vals {
+				b.WriteString("    - " + k + ": " + v + "\n")
+			}
+		}
+
+		if len(c.Params) > 0 {
+			b.WriteString("  Params:\n")
+			for _, p := range c.Params {
+				b.WriteString("    - " + p.Key + ": " + p.Value + "\n")
+			}
+		}
+
+		if len(bodyBytes) > 0 {
+			b.WriteString("  Body:\n")
+			b.WriteString(formatBody(bodyBytes))
+		}
+
+		Log.Debug("%s", b.String())
 
 		c.Next()
 	}
+}
+
+func formatBody(body []byte) string {
+	var pretty bytes.Buffer
+
+	if json.Valid(body) {
+		if err := json.Indent(&pretty, body, "    ", "  "); err == nil {
+			return pretty.String() + "\n"
+		}
+	}
+
+	// fallback (truncate long bodies)
+	const max = 1000
+	if len(body) > max {
+		return "    " + string(body[:max]) + "...(truncated)\n"
+	}
+
+	return "    " + string(body) + "\n"
 }
