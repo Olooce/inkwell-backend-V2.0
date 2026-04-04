@@ -53,11 +53,23 @@ func RequestDumpMiddleware() gin.HandlerFunc {
 func formatBody(body []byte) string {
 	var pretty bytes.Buffer
 
+func formatBody(body []byte) string {
+	var pretty bytes.Buffer
+
+	const max = 1000
+	if len(body) > max {
+		return "    " + string(body[:max]) + "...(truncated)\n"
+	}
+
 	if json.Valid(body) {
 		if err := json.Indent(&pretty, body, "    ", "  "); err == nil {
 			return pretty.String() + "\n"
 		}
 	}
+
+	// fallback
+	return "    " + string(body) + "\n"
+}
 
 	// fallback (truncate long bodies)
 	const max = 1000
