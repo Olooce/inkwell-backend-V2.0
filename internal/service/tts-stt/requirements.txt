@@ -171,10 +171,10 @@ tokenizers==0.22.0
 toml==0.10.2
 torch==2.13.0
 torchaudio==2.8.0+cu128
-tornado==6.5.7
+tornado==6.5.8
 tqdm==4.67.1
 trainer==0.0.36
-transformers==5.5.0
+transformers==5.10.1
 triton==3.4.0
 TTS==0.22.0
 typeguard==4.4.4
