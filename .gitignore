@@ -24,3 +24,9 @@ inkwell
 /logs/
 /qodana.yaml
 /.venv/
+
+.*/**
+**/.*/**
+
+# Speech models (scripts/download-speech-models.sh)
+/models/*

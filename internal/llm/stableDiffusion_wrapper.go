@@ -17,7 +17,7 @@ type StableDiffusionWrapper struct {
 	AccessToken string
 }
 
-// GenerateImage sends a prompt to the Stable Diffusion 2 model on Hugging Face and saves the resulting image.
+// GenerateImage sends a prompt to the Stable Diffusion 2.1 model on Hugging Face and saves the resulting image.
 // It returns the path to the generated image or an error.
 func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 	if s.AccessToken == "" {
@@ -33,8 +33,8 @@ func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 		return "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Stable Diffusion 2 API endpoint.
-	apiURL := "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2"
+	// Stable Diffusion 2.1 API endpoint (corrected model slug).
+	apiURL := "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
 
 	// Create the HTTP request.
 	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(payloadBytes))
@@ -43,24 +43,25 @@ func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+s.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Wait-For-Model", "true") // Wait for model to load instead of getting 503.
 
-	// Execute the request.
-	client := &http.Client{}
+	fmt.Printf("DEBUG: firing POST to [%s] with token prefix [%.15s...]\n", apiURL, s.AccessToken)
+
+	// Execute the request with a generous timeout — SD can be slow on cold starts.
+	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
-		}
-	}(resp.Body)
-
-	// Check if the response is an image by verifying the content type.
 	contentType := resp.Header.Get("Content-Type")
-	if resp.StatusCode == http.StatusOK && len(contentType) >= 5 && contentType[:5] == "image" {
-		// Ensure the directory exists.
+
+	// Happy path — response is an image.
+	if resp.StatusCode == http.StatusOK && strings.HasPrefix(contentType, "image/") {
+		// Ensure the output directory exists.
 		dir := "working/storyImages"
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 			return "", fmt.Errorf("failed to create directory: %w", err)
@@ -74,26 +75,27 @@ func (s *StableDiffusionWrapper) GenerateImage(prompt string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to create image file: %w", err)
 		}
-		defer func(file *os.File) {
-			err := file.Close()
-			if err != nil {
+		defer func() {
+			_ = file.Close()
+		}()
 
-			}
-		}(file)
-
-		_, err = io.Copy(file, resp.Body)
-		if err != nil {
+		if _, err = io.Copy(file, resp.Body); err != nil {
 			return "", fmt.Errorf("failed to save image: %w", err)
 		}
 
 		return strings.TrimPrefix(imagePath, "working/"), nil
-
 	}
 
-	// Otherwise, read the error response.
+	// Model is still loading despite X-Wait-For-Model (shouldn't normally happen, but guard anyway).
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("model is loading, please retry shortly: %s", string(body))
+	}
+
+	// Any other non-OK response — read and surface the error body.
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read error response: %w", err)
+		return "", fmt.Errorf("unexpected status %d and failed to read error response: %w", resp.StatusCode, err)
 	}
-	return "", fmt.Errorf("image generation failed: %s", string(body))
+	return "", fmt.Errorf("image generation failed (status %d): %s", resp.StatusCode, string(body))
 }

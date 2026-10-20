@@ -12,10 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"runtime"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -29,6 +26,7 @@ import (
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
 	"inkwell-backend-V2.0/internal/service"
+	"inkwell-backend-V2.0/internal/speech"
 	"inkwell-backend-V2.0/internal/utilities"
 	Log "inkwell-backend-V2.0/pkg/logging"
 	"inkwell-backend-V2.0/pkg/middleware"
@@ -39,14 +37,23 @@ import (
 )
 
 var (
-	ollamaCmd       *exec.Cmd // Store the Ollama process
-	sttTtsCmd       *exec.Cmd
+	ollamaCmd       *exec.Cmd // Ollama process, only set if this app started it
 	diffusionClient *llm.StableDiffusionWrapper
 	ollamaClient    *llm.OllamaClient
+	speechEngine    *speech.Engine
 	wg              = &sync.WaitGroup{}
+	cleanupOnce     sync.Once
 )
 
 func main() {
+	// Make sure child processes don't outlive a panic in main.
+	defer func() {
+		if r := recover(); r != nil {
+			cleanup()
+			panic(r)
+		}
+	}()
+
 	printStartUpBanner()
 
 	cfg := loadConfig("config.xml")
@@ -78,6 +85,7 @@ func main() {
 	initAuth(cfg)
 	initThirdPartyClients(cfg)
 	runMigrations()
+	seedQuestions()
 
 	// Create repositories and register event listeners.
 	userRepo, assessmentRepo, storyRepo := createRepositories()
@@ -93,7 +101,7 @@ func main() {
 	r := initRouter(cfg)
 
 	// Register API routes.
-	controller.RegisterRoutes(r, authService, userService, assessmentService, storyService, ollamaClient)
+	controller.RegisterRoutes(r, authService, userService, assessmentService, storyService, ollamaClient, speechEngine)
 
 	// Start server and listen for termination signals.
 	runServer(cfg, r)
@@ -122,14 +130,12 @@ func initAuth(cfg *config.APIConfig) {
 }
 
 func initThirdPartyClients(cfg *config.APIConfig) {
-	err := startSTTTTS(cfg)
+	// Load in-process STT/TTS models. Missing models only disable the speech endpoints.
+	engine, err := speech.NewEngine(speech.Config{ModelDir: cfg.ThirdParty.SpeechModelDir})
 	if err != nil {
-		Log.Error("Failed to start STT/TTS service: %v", err)
-		os.Exit(1)
-	}
-	if err := waitForSTTTTS(); err != nil {
-		Log.Error("STT/TTS service failed to become ready: %v", err)
-		os.Exit(1)
+		Log.Warn("Speech engine unavailable, STT/TTS endpoints will return 503: %v", err)
+	} else {
+		speechEngine = engine
 	}
 
 	// Initialize Stable Diffusion wrapper.
@@ -140,10 +146,20 @@ func initThirdPartyClients(cfg *config.APIConfig) {
 	if ollamaHost == "" {
 		ollamaHost = "http://localhost:11434"
 	}
-	// Start Ollama if installed.
+
+	ollamaModel := cfg.ThirdParty.OllamaModel
+	if ollamaModel == "" {
+		ollamaModel = "mistral"
+	}
+
+	// Start Ollama if installed and not already running (e.g. as a system service).
 	if isOllamaInstalled() {
-		startOllama()
-		waitForOllama()
+		if isOllamaRunning() {
+			Log.Info("Ollama is already running; using the existing instance.")
+		} else {
+			startOllama()
+			waitForOllama()
+		}
 	} else {
 		Log.Warn("Ollama not found locally. Using configured remote Ollama host: %s", ollamaHost)
 	}
@@ -151,7 +167,7 @@ func initThirdPartyClients(cfg *config.APIConfig) {
 	ollamaClient = llm.NewOllamaClient(ollamaHost + "/api/generate")
 	// Preload model if using local Ollama.
 	if isOllamaInstalled() {
-		preloadModel("mistral")
+		preloadModel(ollamaModel)
 	}
 }
 
@@ -160,7 +176,7 @@ func runMigrations() {
 		&model.Story{}, &model.Sentence{}, &model.Comic{})
 	if err != nil {
 		Log.Error("AutoMigration Error: %v", err)
-		os.Exit(1)
+		exitWithCleanup(1)
 	}
 }
 
@@ -251,20 +267,18 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 		defer wg.Done()
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			Log.Error("Server failed: %v", err)
-			os.Exit(1)
+			exitWithCleanup(1)
 		}
 	}()
 
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	<-signalChan
 	Log.Info("Received termination signal. Shutting down gracefully...")
 
 	cancel()
 
-	stopSTTTTS()
-	stopOllama()
-
+	// Stop accepting requests first so in-flight ones can still reach Ollama.
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -284,8 +298,28 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 		Log.Warn("Timeout waiting for workers; forcing exit.")
 	}
 
+	cleanup()
+
 	Log.Info("Application shut down.")
 	os.Exit(0)
+}
+
+// cleanup stops child processes and releases native resources. It is safe to
+// call more than once and from any exit path.
+func cleanup() {
+	cleanupOnce.Do(func() {
+		stopOllama()
+		if speechEngine != nil {
+			speechEngine.Close()
+		}
+	})
+}
+
+// exitWithCleanup must be used instead of os.Exit once child processes may be
+// running, because os.Exit skips deferred calls.
+func exitWithCleanup(code int) {
+	cleanup()
+	os.Exit(code)
 }
 
 func printStartUpBanner() {
@@ -322,43 +356,29 @@ func printStartUpBanner() {
 
 // Start Ollama if not already running
 func startOllama() {
-	var command string
-	var args []string
-
-	switch runtime.GOOS {
-	case "windows":
-		command = "cmd"
-		args = []string{"/C", "start", "ollama", "serve"}
-	case "darwin", "linux":
-		command = "ollama"
-		args = []string{"serve"}
-	default:
-		log.Println("Unsupported OS for starting Ollama")
-		return
-	}
-
-	ollamaCmd = exec.Command(command, args...)
-
-	// Sets process group so we can kill the whole tree
-	if runtime.GOOS != "windows" {
-		ollamaCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	}
+	// Run "ollama serve" directly on every OS. Going through "cmd /C start" on
+	// Windows detached the server, so it could never be stopped.
+	cmd := exec.Command("ollama", "serve")
+	configureChildProcess(cmd)
 
 	// Create pipes for standard output and error.
-	stdoutPipe, err := ollamaCmd.StdoutPipe()
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Fatalf("Failed to create stdout pipe: %v", err)
+		Log.Error("Failed to create Ollama stdout pipe: %v", err)
+		exitWithCleanup(1)
 	}
-	stderrPipe, err := ollamaCmd.StderrPipe()
+	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		log.Fatalf("Failed to create stderr pipe: %v", err)
+		Log.Error("Failed to create Ollama stderr pipe: %v", err)
+		exitWithCleanup(1)
 	}
 
 	// Start the process
-	err = ollamaCmd.Start()
-	if err != nil {
-		log.Fatalf("Failed to start Ollama: %v", err)
+	if err := cmd.Start(); err != nil {
+		Log.Error("Failed to start Ollama: %v", err)
+		exitWithCleanup(1)
 	}
+	ollamaCmd = cmd
 
 	// Process standard output logs.
 	go processLogs(stdoutPipe, "[OLLAMA INFO]")
@@ -427,7 +447,8 @@ func preloadModel(modelName string) {
 
 	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
-		log.Fatalf("Failed to preload model %s: %v", modelName, err)
+		Log.Error("Failed to preload model %s: %v", modelName, err)
+		exitWithCleanup(1)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -443,108 +464,40 @@ func preloadModel(modelName string) {
 	}
 }
 
-// Stop Ollama on shutdown
+// stopOllama stops the Ollama server if this application started it. An
+// Ollama instance that was already running (e.g. a system service) is left alone.
 func stopOllama() {
-	if ollamaCmd != nil && ollamaCmd.Process != nil {
-		pid := ollamaCmd.Process.Pid
-
-		if runtime.GOOS != "windows" {
-			// Kill the entire process group (negative PID = process group)
-			if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
-				Log.Warn("Failed to SIGTERM Ollama process group: %v", err)
-			}
-		} else {
-			_ = ollamaCmd.Process.Signal(os.Interrupt)
-		}
-
-		done := make(chan error, 1)
-		go func() { done <- ollamaCmd.Wait() }()
-		select {
-		case err := <-done:
-			if err != nil {
-				log.Printf("Ollama exited with: %v", err)
-			} else {
-				log.Println("Ollama exited gracefully.")
-			}
-		case <-time.After(5 * time.Second):
-			// Force kill the process group
-			if runtime.GOOS != "windows" {
-				_ = syscall.Kill(-pid, syscall.SIGKILL)
-			} else {
-				_ = ollamaCmd.Process.Kill()
-			}
-			log.Println("Ollama force-killed.")
-		}
-		ollamaCmd = nil
-	}
-
-	pids, err := listOllama()
-	if err != nil {
-		log.Printf("Could not list Ollama processes: %v", err)
-		return
-	}
-	if len(pids) == 0 {
-		log.Println("No stray Ollama processes found.")
-		return
-	}
-	for _, pid := range pids {
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			log.Printf("FindProcess(%d) failed: %v", pid, err)
-			continue
-		}
-		if err := proc.Kill(); err != nil {
-			log.Printf("Failed to kill PID %d: %v", pid, err)
-		} else {
-			log.Printf("Killed stray Ollama PID %d", pid)
-		}
-	}
+	stopChildProcess("Ollama", ollamaCmd)
+	ollamaCmd = nil
 }
 
-// listOllama returns PIDs of any running 'ollama' processes.
-func listOllama() ([]int, error) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("tasklist", "/FI", "IMAGENAME eq ollama.exe", "/NH", "/FO", "CSV")
-	case "darwin", "linux":
-		cmd = exec.Command("pgrep", "-f", "ollama")
-	default:
-		return nil, fmt.Errorf("unsupported OS")
+// stopChildProcess asks a child process (and its process group) to exit,
+// force-killing it if it is still running after 5 seconds.
+func stopChildProcess(name string, cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
 	}
 
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		// On Unix, pgrep returns exit code 1 when no matches found
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return nil, nil
-		}
-		// On Windows, tasklist returns non-zero if no matches; treat similarly
-		if runtime.GOOS == "windows" && len(out) == 0 {
-			return nil, nil
-		}
-		return nil, err
+	if err := terminateChild(cmd); err != nil {
+		Log.Warn("Failed to terminate %s: %v", name, err)
 	}
 
-	var pids []int
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if runtime.GOOS == "windows" {
-			parts := strings.Split(line, "\",\"")
-			if len(parts) >= 2 {
-				pidStr := strings.Trim(parts[1], `"`)
-				if pid, err := strconv.Atoi(pidStr); err == nil {
-					pids = append(pids, pid)
-				}
-			}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			Log.Info("%s exited with: %v", name, err)
 		} else {
-			if pid, err := strconv.Atoi(strings.TrimSpace(line)); err == nil {
-				pids = append(pids, pid)
-			}
+			Log.Info("%s exited gracefully.", name)
 		}
+	case <-time.After(5 * time.Second):
+		if err := killChild(cmd); err != nil {
+			Log.Warn("Failed to force-kill %s: %v", name, err)
+		}
+		<-done
+		Log.Info("%s force-killed.", name)
 	}
-	return pids, scanner.Err()
 }
 
 func isOllamaInstalled() bool {
@@ -553,142 +506,4 @@ func isOllamaInstalled() bool {
 		return false
 	}
 	return true
-}
-
-// startSTTTTS starts the STT/TTS Python service using an absolute path to the script.
-// This prevents failures when the process CWD differs from the expected location.
-func startSTTTTS(cfg *config.APIConfig) error {
-	// Try multiple strategies to locate the script:
-	// 1. From current working directory (for development/IDE runs)
-	// 2. From executable directory (for production deployments)
-
-	var scriptPath string
-	var err error
-
-	// Strategy 1: Check working directory first
-	cwd, err := os.Getwd()
-	if err == nil {
-		candidatePath := filepath.Join(cwd, "internal", "service", "tts-stt", "tts-stt.py")
-		if _, err := os.Stat(candidatePath); err == nil {
-			scriptPath = candidatePath
-		}
-	}
-
-	// Strategy 2: If not found, try executable directory
-	if scriptPath == "" {
-		exePath, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("failed to get executable path: %w", err)
-		}
-		// Follow symlinks if present
-		exePath, err = filepath.EvalSymlinks(exePath)
-		if err != nil {
-			return fmt.Errorf("failed to resolve executable symlinks: %w", err)
-		}
-		exeDir := filepath.Dir(exePath)
-		candidatePath := filepath.Join(exeDir, "internal", "service", "tts-stt", "tts-stt.py")
-		if _, err := os.Stat(candidatePath); err == nil {
-			scriptPath = candidatePath
-		}
-	}
-
-	// If still not found, return error
-	if scriptPath == "" {
-		return fmt.Errorf("STT/TTS script not found in working directory or executable directory")
-	}
-
-	cmd := exec.Command(cfg.Context.PythonVenv, scriptPath)
-
-	if runtime.GOOS != "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	}
-
-	// Create pipes for standard output and error (similar to Ollama)
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start STT/TTS: %w", err)
-	}
-
-	// Process standard output logs
-	go processLogs(stdoutPipe, "[STT/TTS INFO]")
-
-	// Process error output logs
-	go processLogs(stderrPipe, "[STT/TTS ERROR]")
-
-	sttTtsCmd = cmd
-	Log.Info("STT/TTS service started with script at: %s", scriptPath)
-	return nil
-}
-
-// waitForSTTTTS polls the STT/TTS service health endpoint with timeout and bounded retries.
-// Returns an error if the service fails to become ready, causing startup to fail fast.
-func waitForSTTTTS() error {
-	// Create HTTP client with per-request timeout to prevent hanging
-	client := &http.Client{
-		Timeout: 3 * time.Second,
-	}
-
-	maxRetries := 10
-	retryDelay := 1 * time.Second
-
-	for i := 0; i < maxRetries; i++ {
-		resp, err := client.Get("http://localhost:8001/health")
-		if err == nil {
-			// Attempt to close response body, but don't abort on close error
-			if closeErr := resp.Body.Close(); closeErr != nil {
-				Log.Debug("Failed to close STT/TTS health check response body: %v", closeErr)
-			}
-
-			if resp.StatusCode == 200 {
-				Log.Info("STT/TTS is now ready.")
-				return nil
-			}
-		}
-
-		Log.Info("Waiting for STT/TTS to start... (attempt %d/%d)", i+1, maxRetries)
-		time.Sleep(retryDelay)
-	}
-
-	return fmt.Errorf("STT/TTS service did not become ready after %d attempts", maxRetries)
-}
-
-func stopSTTTTS() {
-	if sttTtsCmd == nil || sttTtsCmd.Process == nil {
-		return
-	}
-
-	pid := sttTtsCmd.Process.Pid
-
-	if runtime.GOOS != "windows" {
-		if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
-			Log.Warn("Failed to SIGTERM STT/TTS process group: %v", err)
-		}
-	}
-
-	done := make(chan error, 1)
-	go func() { done <- sttTtsCmd.Wait() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			Log.Warn("STT/TTS exited with: %v", err)
-		} else {
-			Log.Info("STT/TTS exited gracefully.")
-		}
-	case <-time.After(5 * time.Second):
-		if runtime.GOOS != "windows" {
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
-		} else {
-			_ = sttTtsCmd.Process.Kill()
-		}
-		Log.Info("STT/TTS force-killed.")
-	}
-	sttTtsCmd = nil
 }

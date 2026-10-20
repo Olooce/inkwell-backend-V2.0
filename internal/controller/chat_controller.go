@@ -1,32 +1,32 @@
 package controller
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
-	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"inkwell-backend-V2.0/internal/llm"
+	"inkwell-backend-V2.0/internal/speech"
 )
 
 // ChatController handles chat-related endpoints
 type ChatController struct {
 	ollamaClient *llm.OllamaClient
+	speech       *speech.Engine // nil when the speech models aren't installed
 }
 
 // NewChatController creates a new chat controller
-func NewChatController(ollamaClient *llm.OllamaClient) *ChatController {
+func NewChatController(ollamaClient *llm.OllamaClient, speechEngine *speech.Engine) *ChatController {
 	return &ChatController{
 		ollamaClient: ollamaClient,
+		speech:       speechEngine,
 	}
 }
 
@@ -187,30 +187,45 @@ func (cc *ChatController) ChatHealth(c *gin.Context) {
 	})
 }
 
+// maxAudioUploadBytes caps speech-to-text uploads (~25 MB).
+const maxAudioUploadBytes = 25 << 20
+
 // SpeechToText handles audio file upload and converts to text
 func (cc *ChatController) SpeechToText(c *gin.Context) {
+	if cc.speech == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "speech-to-text is not available"})
+		return
+	}
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAudioUploadBytes)
 	file, err := c.FormFile("audio")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing audio file"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing or oversized audio file"})
 		return
 	}
 
-	// Create working directory if it doesn't exist
-	if err := os.MkdirAll("./working", 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create directory"})
+	// Save to a server-chosen temp name; the client filename is only used for its extension.
+	tmp, err := os.CreateTemp("", "stt-*"+filepath.Ext(filepath.Base(file.Filename)))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create temp file"})
 		return
 	}
+	path := tmp.Name()
+	_ = tmp.Close()
+	defer os.Remove(path)
 
-	path := "./working/" + file.Filename
 	if err := c.SaveUploadedFile(file, path); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
 		return
 	}
-	defer os.Remove(path) // Clean up after processing
 
-	text, err := SendAudioToSTT(path)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
+	defer cancel()
+
+	text, err := cc.speech.TranscribeFile(ctx, path)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "STT failed: " + err.Error()})
+		log.Printf("STT failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "STT failed"})
 		return
 	}
 
@@ -219,6 +234,11 @@ func (cc *ChatController) SpeechToText(c *gin.Context) {
 
 // TextToSpeech converts text to speech and returns audio
 func (cc *ChatController) TextToSpeech(c *gin.Context) {
+	if cc.speech == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "text-to-speech is not available"})
+		return
+	}
+
 	var req struct {
 		Text string `json:"text" binding:"required"`
 	}
@@ -226,91 +246,21 @@ func (cc *ChatController) TextToSpeech(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
 		return
 	}
-
-	// Create working directory if it doesn't exist
-	if err := os.MkdirAll("./working", 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create directory"})
+	if len(req.Text) > speech.MaxTTSChars {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("text exceeds %d characters", speech.MaxTTSChars)})
 		return
 	}
 
-	outFile := fmt.Sprintf("./working/tts_%d.wav", time.Now().Unix())
-	defer os.Remove(outFile) // Clean up after sending
-
-	if err := GetSpeechFromTTS(req.Text, outFile); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "TTS failed: " + err.Error()})
+	wav, err := cc.speech.Synthesize(req.Text)
+	if errors.Is(err, speech.ErrEmptyText) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "text is empty"})
+		return
+	}
+	if err != nil {
+		log.Printf("TTS failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "TTS failed"})
 		return
 	}
 
-	c.File(outFile)
-}
-func SendAudioToSTT(audioFile string) (string, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	file, err := os.Open(audioFile)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	part, err := writer.CreateFormFile("file", filepath.Base(audioFile))
-	if err != nil {
-		return "", err
-	}
-	_, err = io.Copy(part, file)
-	if err != nil {
-		return "", err
-	}
-	writer.Close()
-
-	req, err := http.NewRequest("POST", "http://localhost:8001/stt", body)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("STT service returned status: %s", resp.Status)
-	}
-
-	var result map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
-	}
-
-	return result["text"], nil
-}
-
-func GetSpeechFromTTS(text string, outFile string) error {
-	formData := url.Values{}
-	formData.Set("text", text)
-
-	resp, err := http.PostForm("http://localhost:8001/tts", formData)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("TTS service returned status: %s, body: %s", resp.Status, string(body))
-	}
-
-	f, err := os.Create(outFile)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, resp.Body)
-	return err
+	c.Data(http.StatusOK, "audio/wav", wav)
 }
