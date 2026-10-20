@@ -38,7 +38,6 @@ type ContextConfig struct {
 	EnableBasicAuth bool                 `xml:"ENABLE_BASIC_AUTH"`
 	Mode            string               `xml:"MODE"` // "release" or "debug"
 	TrustedProxies  TrustedProxiesConfig `xml:"TRUSTED_PROXIES"`
-	PythonVenv      string               `xml:"PYTHON_VENV"`
 }
 
 // TrustedProxiesConfig holds a list of trusted proxy IP addresses.
@@ -48,8 +47,10 @@ type TrustedProxiesConfig struct {
 
 // ThirdPartyConfig holds external service credentials.
 type ThirdPartyConfig struct {
-	HFToken    string `xml:"HF_TOKEN"`
-	OllamaHost string `xml:"OLLAMA_HOST"`
+	HFToken        string `xml:"HF_TOKEN"`
+	OllamaHost     string `xml:"OLLAMA_HOST"`
+	OllamaModel    string `xml:"OLLAMA_MODEL"`
+	SpeechModelDir string `xml:"SPEECH_MODEL_DIR"` // Directory holding the STT/TTS models; defaults to "models".
 }
 
 // AuthenticationConfig holds authentication settings.

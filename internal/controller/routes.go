@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/service"
+	"inkwell-backend-V2.0/internal/speech"
 )
 
 func RegisterRoutes(
@@ -15,6 +16,7 @@ func RegisterRoutes(
 	assessmentService service.AssessmentService,
 	storyService service.StoryService,
 	ollamaClient *llm.OllamaClient, // Add ollama client parameter
+	speechEngine *speech.Engine, // nil disables the speech endpoints
 ) {
 	// Auth routes.
 	authCtrl := NewAuthController(authService)
@@ -60,7 +62,7 @@ func RegisterRoutes(
 	}
 
 	// Chat routes - NEW
-	chatCtrl := NewChatController(ollamaClient)
+	chatCtrl := NewChatController(ollamaClient, speechEngine)
 	chatRoutes := r.Group("/chat")
 	{
 		chatRoutes.POST("/stream", chatCtrl.StreamChat)
