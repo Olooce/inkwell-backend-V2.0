@@ -25,7 +25,7 @@ inkwell
 /qodana.yaml
 /.venv/
 
-.*/**
+.*/****
 **/.*/**
 
 # Speech models (scripts/download-speech-models.sh), wherever they end up
@@ -33,3 +33,6 @@ models/
 
 # Local image generation binary (scripts/download-image-model.sh)
 /tools/stable-diffusion.cpp/
+
+# Release bundles (make dist)
+/dist/

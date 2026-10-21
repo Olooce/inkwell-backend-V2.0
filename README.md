@@ -8,332 +8,146 @@
 
 
 ## Overview
-Inkwell Backend is the server-side component of the Inkwell project. It handles user authentication, data storage, story and comic generation, and integrates AI-powered functionality through LLM services. Built in Go, the backend uses a modular architecture that cleanly separates configuration, database management, and business logic.
+Inkwell is a writing companion for children. A child takes a
+short grammar quiz, then writes stories one sentence at a time: each sentence is
+checked and corrected, illustrated, and the finished story becomes a downloadable
+comic with personalised writing tips.
+
+This repository is the Go backend. It serves the REST API used by the
+[Inkwell frontend](https://github.com/Olooce/inkwell-V2.0) and runs the AI
+features. The heavy models run locally, so children's writing doesn't have to
+leave the server.
 
 ## Features
-- **User Authentication & Authorization:** Secure login, registration, and token management.
-- **Story & Comic Generation:** Create, update, and complete stories; generate comics based on stories.
-- **AI Integration:** LLM and image generation using external services.
-- **Event-Driven Architecture:** Internal event bus to trigger background processes.
-- **RESTful API:** RESTful endpoints for client-side integrations.
-- **Cross-Platform Support:** OS-specific commands to manage external services (e.g., starting/stopping Ollama).
+- **Accounts:** registration, login and JWT access/refresh tokens.
+- **Grammar quiz:** a five-question placement quiz, which can be retaken to
+  measure progress. Answers are graded by deterministic rules; only close,
+  reworded answers are referred to the LLM, as a strict judge.
+- **Story writing:** each sentence is corrected with a short explanation and
+  illustrated. Finished stories are turned into PDF comics.
+- **Writing feedback:** an analysis, tips and a score for every finished story,
+  generated in the background.
+- **Progress:** quiz scores over time, writing statistics and accuracy.
+- **Writing helper chat:** streaming LLM chat, with speech-to-text input and
+  text-to-speech read-aloud.
+- **Release bundle:** `make dist` builds a self-contained package with all the
+  models included.
 
-## Frontend
+## How the AI parts fit together
+| Feature | Runs on | Implementation |
+|---|---|---|
+| Quiz grading | Rules, plus the LLM for close calls | `internal/grading` |
+| Sentence correction, feedback, story analysis, chat | Local LLM via [Ollama](https://ollama.com); set `OLLAMA_MODEL` (default `mistral`) | `internal/llm` |
+| Story pictures | [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) running SD-Turbo locally (GPU via Vulkan, CPU fallback); Hugging Face optional | `internal/imagegen` |
+| Speech-to-text and text-to-speech | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) in-process (Whisper base.en, Piper voice) | `internal/speech` |
 
-The front-end repository is available at: [Inkwell Frontend](https://github.com/Olooce/inkwell-V2.0)
+LLM output is requested as schema-constrained JSON, so it is parsed reliably.
+If Ollama is installed but not running, the server starts it and stops it again
+on shutdown.
 
+## Tech stack
+Go 1.25 (cgo), Gin, GORM with PostgreSQL, Ollama, sherpa-onnx with ONNX Runtime,
+stable-diffusion.cpp, gofpdf.
 
-## Project Structure
+## Project structure
 ```
 .
-├── cmd
-│   └── app
-│       ├── main.go                 # Application entry point
-│       └── seed.go                 # Database seeding script
-├── config-example.xml              # Example configuration file
-├── config.xml                      # Application configuration file
-├── go.mod                          # Go module file
-├── go.sum                          # Dependency checksum file
-├── internal
-│   ├── config
-│   │   └── config.go             # Configuration loader
-│   ├── db
-│   │   └── connection_manager.go # Database connection management
-│   ├── llm
-│   │   ├── ollama_client.go      # LLM API client (Ollama)
-│   │   └── stableDiffusion_wrapper.go  # Stable Diffusion integration
-│   ├── model
-│   │   └── model.go             # Data models
-│   ├── repository    # Data access layer
-│   │   ├── assessment_repository.go  
-|   |   ├── question_repository.go  
-|   |   ├── story_repository.go  
-|   |   └── user_repository.go   
-│   └── service
-│       ├── analysis_service.go   # Analysis & writing skills
-│       ├── assessment_service.go # Assessment logic
-│       ├── auth_service.go       # User authentication
-│       ├── comic_service.go      # Comic generation
-│       ├── progress_service.go   # Progress tracking
-│       ├── story_service.go      # Story management
-│       └── user_service.go       # User management
-├── utilities
-│   ├── auth_middleware.go        # JWT authentication middleware
-│   ├── CORS_middleware.go        # CORS handling
-│   ├── event_bus.go              # Internal event bus
-│   └── jwt_util.go               # JWT utility functions
-└── working
-    ├── comics                  # Generated comic PDFs
-    └── storyImages             # AI-generated story images
+├── cmd/app/
+│   ├── main.go                # Entry point: config, services, routes, child processes
+│   ├── seed.go                # Seeds the quiz questions on first start
+│   └── process_*.go           # Per-OS handling of child processes (Ollama)
+├── internal/
+│   ├── config/                # XML configuration loader
+│   ├── controller/            # HTTP handlers and route registration
+│   ├── db/                    # Database connection pool
+│   ├── grading/               # Rule-based quiz grading (+ LLM judge interface)
+│   ├── imagegen/              # Image generation: local stable-diffusion.cpp, Hugging Face
+│   ├── llm/                   # Ollama client: chat, corrections, judging, analysis
+│   ├── model/                 # GORM data models
+│   ├── repository/            # Data access
+│   ├── service/               # Business logic (auth, quiz, stories, comics, analysis, progress)
+│   ├── speech/                # In-process speech-to-text / text-to-speech
+│   └── utilities/             # JWT helpers
+├── pkg/
+│   ├── event_bus/             # In-process events (e.g. story completed -> comic + analysis)
+│   ├── logging/               # Rotating log files
+│   └── middleware/            # Auth, CORS, rate limiting, request dumps
+├── scripts/                   # Model downloads and release bundle build
+├── packaging/                 # Files shipped inside the release bundle
+├── models/  tools/            # Downloaded models and stable-diffusion.cpp (git-ignored)
+├── working/                   # Generated story images and comic PDFs (served under /static)
+├── config-example.xml         # Configuration template
+└── Makefile
 ```
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
-- **Go:** Install the latest version from [Go Downloads](https://go.dev/dl/).
-- **Database:** Set up your preferred database (PostgreSQL, MySQL, SQLite, etc.) and configure it in `config.xml`.
-- **External Services:** Ensure any external services (e.g., Ollama, Stable Diffusion) are installed and accessible.
+- **Go 1.25+** and a C compiler (cgo is required for the speech engine).
+- **PostgreSQL.**
+- **Ollama** with the model you configure, e.g. `ollama pull qwen2.5:3b`.
+- **ffmpeg** on the PATH (decodes recorded audio for speech-to-text).
+- Optional: a **Vulkan-capable GPU driver** for faster pictures (about 5 s each
+  on a GTX 1650; slower on the CPU).
+- Optional: a **Hugging Face token** with credits, if you want hosted image
+  generation as a fallback.
 
-### Installation
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/Olooce/inkwell-backend-V2.0.git
-   cd inkwell-backend-V2.0
-   ```
-2. **Download Dependencies:**
-   ```bash
-   go mod tidy
-   ```
-3. **Configure the Application:**
-    - Edit `config.xml` with your database credentials, API tokens, and other settings.
+### Setup
+```bash
+git clone https://github.com/Olooce/inkwell-backend-V2.0.git
+cd inkwell-backend-V2.0
+cp config-example.xml config.xml   # then edit it, see below
+make models                        # downloads the speech and image models (~2.4 GB, once)
+```
 
-### Running the Application
-- **Development Mode:**
-  ```bash
-  go run cmd/app/main.go
-  ```
-- **Seeding the Database (if needed):**
-  ```bash
-  go run cmd/app/seed.go
-  ```
-- **Build and Run Executable:**
-  ```bash
-  go build -o inkwell cmd/app/main.go
-  ./inkwell
-  ```
+### Configuration
+All settings live in `config.xml` (start from `config-example.xml`). If the file
+is missing, the server reads the same XML from the `CONFIG_XML` environment
+variable, which can also be set in a `.env` file.
 
-## API Documentation
+| Section | What it controls |
+|---|---|
+| `CONTEXT` | Host, port, mode (`debug` / `release`), trusted proxies |
+| `AUTHENTICATION` | Token lifetimes and the access/refresh signing secrets |
+| `DB` | PostgreSQL connection and pool settings |
+| `THIRD_PARTY` | `OLLAMA_HOST`, `OLLAMA_MODEL`, `SPEECH_MODEL_DIR`, `HF_TOKEN` |
+| `IMAGE_GENERATION` | `PROVIDER` (`local` or `huggingface`), `FALLBACK`, model paths, steps |
+| `LOGGING` | Log directory, rotation size, backups and retention |
 
-### Authentication Routes
-- **POST `/auth/register`**  
-  **Description:** Register a new user.  
-  **Request Body Example:**
-  ```json
-  {
-    "name": "John Doe",
-    "email": "john@example.com",
-    "password": "secret"
-  }
-  ```
-  **Response Example:**
-  ```json
-  {
-    "message": "User registered successfully"
-  }
-  ```
+Keep `config.xml` out of version control; it holds secrets and is already
+git-ignored.
 
-- **POST `/auth/login`**  
-  **Description:** Log in a user and receive a JWT token.  
-  **Request Body Example:**
-  ```json
-  {
-    "email": "john@example.com",
-    "authhash": "hashed_password"
-  }
-  ```
-  **Response Example:**
-  ```json
-  {
-    "user_id": 1,
-    "token": "jwt-token-here"
-  }
-  ```
+### Running
+```bash
+go run ./cmd/app      # development; quiz questions are seeded on first start
+make build && ./inkwell
+```
+If the speech or image models are missing, the server still starts: the speech
+endpoints return 503, and stories are saved without pictures.
 
-- **POST `/auth/refresh`**  
-  **Description:** Refresh JWT tokens.  
-  **Request Body Example:**
-  ```json
-  {
-    "refresh_token": "refresh-token-here"
-  }
-  ```
-  **Response Example:**
-  ```json
-  {
-    "access_token": "new-jwt-token",
-    "refresh_token": "new-refresh-token"
-  }
-  ```
+### Tests
+```bash
+make test             # go vet + unit tests
+OLLAMA_TEST=1 OLLAMA_MODEL=qwen2.5:3b go test ./internal/llm/   # against a local Ollama
+IMAGEGEN_TEST=1 go test -run TestLocalGenerate ./internal/imagegen/   # renders a real image
+SPEECH_MODEL_DIR=$PWD/models go test ./internal/speech/              # speech round trip
+```
 
-### User Routes
-- **GET `/user`**  
-  **Description:** Retrieve all users.  
-  **Response Example:**
-  ```json
-  [
-    {
-      "id": 1,
-      "name": "John Doe",
-      "email": "john@example.com",
-      "": ""
-    }
-  ]
-  ```
+## Release bundle
+`make dist` builds a self-contained package in `dist/`: a folder and a `.tar.gz`
+(about 2.5 GB) containing the server binary, its native libraries, the speech and
+image models and stable-diffusion.cpp, plus `SHA256SUMS`. Unpack it on any Linux
+x86-64 machine, put a `config.xml` next to the binary and run `./inkwell`. It
+can be started from any directory and needs no Go toolchain or downloads.
 
-### Assessment Routes
-- **POST `/assessments/start`**  
-  **Description:** Start a new assessment session with a randomly selected grammar topic.  
-  **Response Example:**
-  ```json
-  {
-    "session_id": "abc123",
-    "topic": "Tenses",
-    "questions": [ /* question objects */ ]
-  }
-  ```
-
-- **POST `/assessments/submit`**  
-  **Description:** Submit an answer for a question within an assessment.  
-  **Request Body Example:**
-  ```json
-  {
-    "session_id": "abc123",
-    "question_id": 1,
-    "answer": "Your answer here"
-  }
-  ```
-  **Response Example:**
-  ```json
-  {
-    "feedback": "Correct",
-    "is_correct": true
-  }
-  ```
-
-- **GET `/assessments/:session_id`**  
-  **Description:** Retrieve a specific assessment session by session ID.  
-  **Response Example:**
-  ```json
-  {
-    "session_id": "abc123",
-    "questions": [ /* question objects */ ],
-    "answers": [ /* answer objects */ ]
-  }
-  ```
-
-### Story Routes
-- **GET `/stories/`**  
-  **Description:** Retrieve all stories.  
-  **Response Example:**
-  ```json
-  [
-    {
-      "id": 1,
-      "title": "A Great Story",
-      "analysis": "Detailed analysis..."
-    }
-  ]
-  ```
-
-- **POST `/stories/start_story`**  
-  **Description:** Start a new story.  
-  **Request Body Example:**
-  ```json
-  {
-    "title": "A New Adventure"
-  }
-  ```
-  **Response Example:**
-  ```json
-  {
-    "story_id": 1,
-    "guidance": "Begin with an exciting sentence!",
-    "max_sentences": 5
-  }
-  ```
-
-- **POST `/stories/:id/add_sentence`**  
-  **Description:** Add a sentence to an existing story.  
-  **Request Body Example:**
-  ```json
-  {
-    "sentence": "Once upon a time..."
-  }
-  ```
-  **Response Example:**
-  ```json
-  {
-    "sentence": {
-      "original_text": "Once upon a time...",
-      "corrected_text": "Once upon a time...",
-      "feedback": "Looks good!",
-      "image_url": "http://example.com/image.png"
-    }
-  }
-  ```
-
-- **POST `/stories/:id/complete_story`**  
-  **Description:** Mark a story as complete.  
-  **Response Example:**
-  ```json
-  {
-    "message": "Story completed successfully"
-  }
-  ```
-
-- **GET `/stories/progress`**  
-  **Description:** Get the progress of the current user's in-progress story.  
-  **Response Example:**
-  ```json
-  {
-    "story_id": 1,
-    "progress": "3/5 sentences added"
-  }
-  ```
-
-- **GET `/stories/comics`**  
-  **Description:** Retrieve all generated comics for the authenticated user.  
-  **Response Example:**
-  ```json
-  [
-    {
-      "comic_id": 10,
-      "url": "http://example.com/comic_10.pdf"
-    }
-  ]
-  ```
-
-### Analysis Routes (Writing Skills)
-- **GET `/writing-skills/analysis/`**  
-  **Description:** Get detailed analysis for completed stories along with writing tips.  
-  **Response Example:**
-  ```json
-  {
-    "stories": [
-      {
-        "story_id": 1,
-        "title": "A Great Story",
-        "analysis": "Detailed analysis...",
-        "tips": ["Tip 1", "Tip 2"]
-      }
-    ]
-  }
-  ```
-
-- **GET `/writing-skills/analysis/overview`**  
-  **Description:** Retrieve an overview of writing skills progress.  
-  **Response Example:**
-  ```json
-  {
-    "initial_progress": "Initial progress data",
-    "current_progress": "Current progress data"
-  }
-  ```
-
-- **GET `/writing-skills/analysis/download_report?type=initial` or `?type=current`**  
-  **Description:** Download a PDF report for initial or current progress.  
-  **Response:** A PDF file is served with the appropriate download headers.
-
-### Static File & Download Routes
-- **GET `/static`**  
-  **Description:** Serve static files from the `working` directory.
-
-- **GET `/download/comics/:filename`**  
-  **Description:** Download a comic PDF with proper headers.  
-  **Example:** Accessing `/download/comics/comic_10.pdf` initiates a download of that comic.
+The target machine still needs PostgreSQL, Ollama (with the model pulled),
+ffmpeg, and a glibc at least as new as Ubuntu 24.04's. A Vulkan GPU driver is
+optional.
 
 ## License
-This project is licensed under the **MIT License**.
+Inkwell is licensed under the **MIT License**. The release bundle also contains
+third-party components under their own licences, including the SD-Turbo model
+(Stability AI Community License); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 <a href="https://next.ossinsight.io/widgets/official/compose-contributors?repo_id=949105136&limit=200" target="_blank" style="display: block" align="center">
