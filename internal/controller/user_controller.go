@@ -16,11 +16,18 @@ func NewUserController(userService service.UserService) *UserController {
 	return &UserController{UserService: userService}
 }
 
-func (uc *UserController) GetAllUsers(c *gin.Context) {
-	users, err := uc.UserService.GetAllUsers()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// GetCurrentUser returns the signed-in user's own profile.
+func (uc *UserController) GetCurrentUser(c *gin.Context) {
+	uid, ok := c.Get("user_id")
+	id, isUint := uid.(uint)
+	if !ok || !isUint {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		return
 	}
-	c.JSON(http.StatusOK, users)
+	user, err := uc.UserService.GetUser(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+	c.JSON(http.StatusOK, user)
 }

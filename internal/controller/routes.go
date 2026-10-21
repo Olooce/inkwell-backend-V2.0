@@ -15,7 +15,7 @@ func RegisterRoutes(
 	userService service.UserService,
 	assessmentService service.AssessmentService,
 	storyService service.StoryService,
-	ollamaClient *llm.OllamaClient, // Add ollama client parameter
+	ollamaClient *llm.OllamaClient,
 	speechEngine *speech.Engine, // nil disables the speech endpoints
 ) {
 	// Auth routes.
@@ -29,7 +29,7 @@ func RegisterRoutes(
 
 	// User routes.
 	userCtrl := NewUserController(userService)
-	r.GET("/user", userCtrl.GetAllUsers)
+	r.GET("/user", userCtrl.GetCurrentUser)
 
 	// Assessment routes.
 	assessmentCtrl := NewAssessmentController(assessmentService)
@@ -73,22 +73,6 @@ func RegisterRoutes(
 		chatRoutes.POST("/text-to-speech", chatCtrl.TextToSpeech)
 		chatRoutes.GET("/health", chatCtrl.ChatHealth)
 	}
-
-	//// API routes for frontend compatibility
-	//apiRoutes := r.Group("/api")
-	//{
-	//	// Mirror chat routes under /api for frontend
-	//	apiChatRoutes := apiRoutes.Group("/chat")
-	//	{
-	//		apiChatRoutes.POST("/stream", chatCtrl.StreamChat)
-	//		apiChatRoutes.GET("/writing-tip", chatCtrl.GetWritingTip)
-	//		apiChatRoutes.GET("/story-idea", chatCtrl.GetStoryIdea)
-	//		apiChatRoutes.POST("/improve-text", chatCtrl.ImproveText)
-	//		chatRoutes.POST("/speech-to-text", chatCtrl.SpeechToText)
-	//		chatRoutes.POST("/text-to-speech", chatCtrl.TextToSpeech)
-	//		apiChatRoutes.GET("/health", chatCtrl.ChatHealth)
-	//	}
-	//}
 
 	// Static routes.
 	staticCtrl := NewStaticController()

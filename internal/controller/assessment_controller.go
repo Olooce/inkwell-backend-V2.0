@@ -76,19 +76,13 @@ func (ac *AssessmentController) SubmitAssessment(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Question does not belong to this assessment"})
 		return
 	}
-	isCorrect := question.CorrectAnswer == req.Answer
-	feedback := "Incorrect"
-	if isCorrect {
-		feedback = "Correct"
-	}
+	// SaveAnswer grades the answer (see internal/grading).
 	answer := model.Answer{
 		AssessmentID: assessment.ID,
 		SessionID:    req.SessionID,
 		QuestionID:   req.QuestionID,
 		UserID:       assessment.UserID,
 		Answer:       req.Answer,
-		IsCorrect:    isCorrect,
-		Feedback:     feedback,
 	}
 	answerResponse, err := ac.AssessmentService.SaveAnswer(&answer)
 	if err != nil {

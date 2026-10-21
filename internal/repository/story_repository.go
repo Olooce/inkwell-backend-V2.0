@@ -9,7 +9,7 @@ import (
 )
 
 type StoryRepository interface {
-	GetStories() ([]model.Story, error)
+	GetStoriesByUser(userID uint) ([]model.Story, error)
 	GetStoryByID(storyID uint) (*model.Story, error)
 	CreateStory(story *model.Story) error
 	CreateSentence(sentence *model.Sentence) error
@@ -31,9 +31,9 @@ func NewStoryRepository() StoryRepository {
 	return &storyRepository{}
 }
 
-func (r *storyRepository) GetStories() ([]model.Story, error) {
+func (r *storyRepository) GetStoriesByUser(userID uint) ([]model.Story, error) {
 	var stories []model.Story
-	err := db.GetDB().Find(&stories).Error
+	err := db.GetDB().Where("user_id = ?", userID).Order("created_at desc").Find(&stories).Error
 	return stories, err
 }
 
@@ -131,6 +131,7 @@ func (r *storyRepository) GetCompletedStoriesWithAnalysis(userID uint) ([]model.
 
 func (r *storyRepository) GetStoriesWithoutAnalysis() ([]model.Story, error) {
 	var stories []model.Story
-	err := db.GetDB().Where("analysis = '' OR analysis = null OR performance_score = 0").Find(&stories).Error
+	// Only finished stories; "= null" never matches in SQL, so use IS NULL.
+	err := db.GetDB().Where("status = ? AND (analysis IS NULL OR analysis = '')", "completed").Find(&stories).Error
 	return stories, err
 }

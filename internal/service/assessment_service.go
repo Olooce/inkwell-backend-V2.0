@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"inkwell-backend-V2.0/internal/grading"
 	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
@@ -93,21 +94,23 @@ func (s *assessmentService) SaveAnswer(answer *model.Answer) (*model.AnswerRespo
 		return nil, fmt.Errorf("question not found")
 	}
 
-	// Extract question text based on type
-	var questionText string
-	if question.QuestionType == "masked" {
-		questionText = question.MaskedSentence
-	} else if question.QuestionType == "error_correction" {
-		questionText = question.ErrorSentence
-	} else {
+	if question.QuestionType != grading.TypeMasked && question.QuestionType != grading.TypeErrorCorrection {
 		return nil, fmt.Errorf("unknown question type: %s", question.QuestionType)
 	}
 
-	// Evaluate the answer using LLM
-	isCorrect, feedback, err := s.ollamaClient.EvaluateAnswer(questionText, answer.Answer, question.CorrectAnswer)
-	if err != nil {
-		return nil, err
+	// Rules decide clear-cut answers; the LLM only judges close alternatives.
+	var judge grading.Judge
+	if s.ollamaClient != nil {
+		judge = s.ollamaClient
 	}
+	verdict := grading.Grade(grading.Question{
+		Type:           question.QuestionType,
+		Category:       question.Category,
+		MaskedSentence: question.MaskedSentence,
+		ErrorSentence:  question.ErrorSentence,
+		CorrectAnswer:  question.CorrectAnswer,
+	}, answer.Answer, judge)
+	isCorrect, feedback := verdict.Correct, verdict.Feedback
 
 	// Save the answer result
 	answer.IsCorrect = isCorrect

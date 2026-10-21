@@ -28,5 +28,8 @@ inkwell
 .*/**
 **/.*/**
 
-# Speech models (scripts/download-speech-models.sh)
-/models/*
+# Speech models (scripts/download-speech-models.sh), wherever they end up
+models/
+
+# Local image generation binary (scripts/download-image-model.sh)
+/tools/stable-diffusion.cpp/

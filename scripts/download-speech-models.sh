@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Downloads the speech-to-text (Whisper base.en) and text-to-speech (Piper
 # en_US-lessac-medium) models used by internal/speech.
-# Usage: scripts/download-speech-models.sh [model_dir]   (default: models)
+# Usage: scripts/download-speech-models.sh [model_dir]   (default: <repo>/models)
 set -euo pipefail
 
-MODEL_DIR="${1:-models}"
+# Default to the repo-root models/ dir regardless of where the script is run from.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MODEL_DIR="${1:-$REPO_ROOT/models}"
 BASE="https://github.com/k2-fsa/sherpa-onnx/releases/download"
 MODELS=(
   "asr-models/sherpa-onnx-whisper-base.en"

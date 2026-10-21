@@ -1,8 +1,11 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"log"
 
+	"inkwell-backend-V2.0/internal/imagegen"
 	llm2 "inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
@@ -12,7 +15,8 @@ import (
 )
 
 type StoryService interface {
-	GetStories() ([]model.Story, error)
+	GetStories(userID uint) ([]model.Story, error)
+	GetStory(storyID uint) (*model.Story, error)
 	CreateStory(userID uint, title string) (*model.Story, error)
 	AddSentence(storyID uint, sentence string) (*model.Sentence, error)
 	CompleteStory(storyID uint) error
@@ -21,21 +25,25 @@ type StoryService interface {
 }
 
 type storyService struct {
-	storyRepo       repository.StoryRepository
-	llmClient       *llm2.OllamaClient
-	diffusionClient *llm2.StableDiffusionWrapper
+	storyRepo repository.StoryRepository
+	llmClient *llm2.OllamaClient
+	images    imagegen.Generator // nil when no image backend is available
 }
 
-func NewStoryService(storyRepo repository.StoryRepository, llmClient *llm2.OllamaClient, diffusionClient *llm2.StableDiffusionWrapper) StoryService {
+func NewStoryService(storyRepo repository.StoryRepository, llmClient *llm2.OllamaClient, images imagegen.Generator) StoryService {
 	return &storyService{
-		storyRepo:       storyRepo,
-		llmClient:       llmClient,
-		diffusionClient: diffusionClient,
+		storyRepo: storyRepo,
+		llmClient: llmClient,
+		images:    images,
 	}
 }
 
-func (s *storyService) GetStories() ([]model.Story, error) {
-	return s.storyRepo.GetStories()
+func (s *storyService) GetStory(storyID uint) (*model.Story, error) {
+	return s.storyRepo.GetStoryByID(storyID)
+}
+
+func (s *storyService) GetStories(userID uint) ([]model.Story, error) {
+	return s.storyRepo.GetStoriesByUser(userID)
 }
 
 func (s *storyService) CreateStory(userID uint, title string) (*model.Story, error) {
@@ -52,67 +60,48 @@ func (s *storyService) CreateStory(userID uint, title string) (*model.Story, err
 	return story, nil
 }
 
-// result types for each asynchronous call
-type llmResult struct {
-	corrected string
-	feedback  string
-	err       error
-}
-
-type imageResult struct {
-	path string
-	err  error
-}
-
-// AddSentence creates a new sentence record, corrects the sentence using the LLM client,
-// generates an image using the diffusion client, and saves the result.
+// AddSentence corrects the sentence with the LLM, illustrates the scene the
+// LLM describes, and saves the result. Illustration waits for the review so
+// the picture can use the disambiguated scene description.
 func (s *storyService) AddSentence(storyID uint, sentence string) (*model.Sentence, error) {
-	// Create a new sentence record with the original text.
 	newSentence := &model.Sentence{
-		StoryID:      storyID,
-		OriginalText: sentence,
-		CreatedAt:    time.Now(),
+		StoryID:       storyID,
+		OriginalText:  sentence,
+		CorrectedText: sentence,
+		Feedback:      "Could not generate feedback",
+		CreatedAt:     time.Now(),
 	}
 
-	// Channels to receive results.
-	llmCh := make(chan llmResult)
-	imageCh := make(chan imageResult)
-
-	// Run LLM correction concurrently.
-	go func() {
-		corrected, feedback, err := s.llmClient.CorrectSentence(sentence)
-		llmCh <- llmResult{corrected: corrected, feedback: feedback, err: err}
-	}()
-
-	// Run image generation concurrently.
-	go func() {
-		comicPrompt := "Comic-style illustration with bold outlines, vibrant colors, and dynamic poses. Scene: " + sentence + ". " +
-			"Expressive characters and engaging composition like a graphic novel. Use strong lighting and shading for depth."
-
-		path, err := s.diffusionClient.GenerateImage(comicPrompt)
-		imageCh <- imageResult{path: path, err: err}
-	}()
-
-	// Wait for both operations to complete.
-	llmRes := <-llmCh
-	imgRes := <-imageCh
-
-	// Set corrected text and feedback.
-	if llmRes.err != nil {
-		newSentence.CorrectedText = sentence
-		newSentence.Feedback = "Could not generate feedback"
-	} else {
-		newSentence.CorrectedText = llmRes.corrected
-		newSentence.Feedback = llmRes.feedback
+	title := ""
+	if story, err := s.storyRepo.GetStoryByID(storyID); err == nil {
+		title = story.Title
+	}
+	var previous []string
+	if earlier, err := s.storyRepo.GetSentencesByStory(storyID); err == nil {
+		for _, e := range earlier {
+			previous = append(previous, e.CorrectedText)
+		}
 	}
 
-	// Set image URL.
-	if imgRes.err != nil {
-		fmt.Printf("Warning: Failed to generate image: %v\n", imgRes.err)
-		newSentence.ImageURL = ""
+	imagePrompt := imagegen.StoryPrompt(title, sentence)
+	if review, err := s.llmClient.ReviewSentence(title, previous, sentence); err != nil {
+		log.Printf("Sentence review failed: %v", err)
 	} else {
-		fmt.Println("Generated image at:", imgRes.path)
-		newSentence.ImageURL = imgRes.path
+		newSentence.CorrectedText = review.Corrected
+		if review.Feedback != "" {
+			newSentence.Feedback = review.Feedback
+		}
+		if review.Scene != "" {
+			imagePrompt = imagegen.ScenePrompt(review.Scene)
+		}
+	}
+
+	if s.images == nil {
+		log.Println("Warning: no image generator configured")
+	} else if path, err := s.images.Generate(context.Background(), imagePrompt); err != nil {
+		log.Printf("Warning: Failed to generate image: %v", err)
+	} else {
+		newSentence.ImageURL = path
 	}
 
 	// Save the sentence record.

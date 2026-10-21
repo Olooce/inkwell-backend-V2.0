@@ -8,7 +8,7 @@ import (
 type UserRepository interface {
 	CreateUser(user *model.User) error
 	GetUserByEmail(email string) (*model.User, error)
-	GetAllUsers() ([]model.User, error)
+	GetUserByID(id uint) (*model.User, error)
 }
 
 type userRepository struct{}
@@ -27,8 +27,8 @@ func (r *userRepository) GetUserByEmail(email string) (*model.User, error) {
 	return &user, err
 }
 
-func (r *userRepository) GetAllUsers() ([]model.User, error) {
-	var users []model.User
-	err := db.GetDB().Find(&users).Error
-	return users, err
+func (r *userRepository) GetUserByID(id uint) (*model.User, error) {
+	var user model.User
+	err := db.GetDB().First(&user, id).Error
+	return &user, err
 }

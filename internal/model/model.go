@@ -36,7 +36,7 @@ type Question struct {
 	QuestionType   string `json:"question_type" gorm:"type:varchar(20);not null"` // "masked" or "error_correction"
 	MaskedSentence string `json:"masked_sentence" gorm:"type:text"`
 	ErrorSentence  string `json:"error_sentence" gorm:"type:text"`
-	CorrectAnswer  string `json:"correct_answer" gorm:"type:text;not null"`
+	CorrectAnswer  string `json:"-" gorm:"type:text;not null"` // never sent to clients
 }
 
 type Answer struct {

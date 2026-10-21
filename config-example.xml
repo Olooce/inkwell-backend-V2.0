@@ -48,6 +48,17 @@
         <SPEECH_MODEL_DIR>models</SPEECH_MODEL_DIR>
     </THIRD_PARTY>
 
+    <!-- Story pictures. PROVIDER: local (default) | huggingface.
+         FALLBACK: huggingface | local | none (default: huggingface when HF_TOKEN is set).
+         Local needs scripts/download-image-model.sh; Hugging Face needs paid credits. -->
+    <IMAGE_GENERATION PROVIDER="local" FALLBACK="none">
+        <SD_BINARY>tools/stable-diffusion.cpp/sd-cli</SD_BINARY>
+        <SD_MODEL>models/sd-turbo/sd_turbo-q8_0.gguf</SD_MODEL>
+        <STEPS>2</STEPS>
+        <HF_MODEL>stabilityai/stable-diffusion-3-medium-diffusers</HF_MODEL>
+        <HF_PROVIDER>hf-inference</HF_PROVIDER>
+    </IMAGE_GENERATION>
+
 
     <LOGGING>
         <LOG_DIR RELATIVE="true">/logs</LOG_DIR>
