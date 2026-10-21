@@ -26,7 +26,20 @@ type APIConfig struct {
 	Pagination     PaginationConfig     `xml:"PAGINATION"`
 	DB             DBConfig             `xml:"DB"`
 	ThirdParty     ThirdPartyConfig     `xml:"THIRD_PARTY"`
+	Images         ImageGenConfig       `xml:"IMAGE_GENERATION"`
 	Logging        LoggingConfig        `xml:"LOGGING"`
+}
+
+// ImageGenConfig selects how story pictures are generated. Every field is
+// optional; by default images are made locally with stable-diffusion.cpp.
+type ImageGenConfig struct {
+	Provider   string `xml:"PROVIDER,attr"` // local (default) | huggingface
+	Fallback   string `xml:"FALLBACK,attr"` // huggingface | local | none
+	SDBinary   string `xml:"SD_BINARY"`
+	SDModel    string `xml:"SD_MODEL"`
+	Steps      int    `xml:"STEPS"`
+	HFModel    string `xml:"HF_MODEL"`
+	HFProvider string `xml:"HF_PROVIDER"`
 }
 
 // ContextConfig holds basic server settings.

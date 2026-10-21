@@ -18,8 +18,19 @@ func NewStoryController(storyService service.StoryService) *StoryController {
 	return &StoryController{StoryService: storyService}
 }
 
+// GetStories returns the signed-in user's stories only.
 func (sc *StoryController) GetStories(c *gin.Context) {
-	stories, err := sc.StoryService.GetStories()
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+	uid, ok := userID.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID"})
+		return
+	}
+	stories, err := sc.StoryService.GetStories(uid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -82,6 +93,9 @@ func (sc *StoryController) AddSentence(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid story ID"})
 		return
 	}
+	if !sc.ownsActiveStory(c, uint(storyIDUint)) {
+		return
+	}
 	var req struct {
 		Sentence string `json:"sentence" binding:"required"`
 	}
@@ -102,6 +116,9 @@ func (sc *StoryController) CompleteStory(c *gin.Context) {
 	storyIDUint, err := strconv.ParseUint(storyIDParam, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid story ID"})
+		return
+	}
+	if !sc.ownsActiveStory(c, uint(storyIDUint)) {
 		return
 	}
 	if err := sc.StoryService.CompleteStory(uint(storyIDUint)); err != nil {
@@ -147,4 +164,26 @@ func (sc *StoryController) GetComics(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, comics)
+}
+
+// ownsActiveStory checks that storyID belongs to the signed-in user and is
+// still being written. It writes the error response and returns false if not.
+func (sc *StoryController) ownsActiveStory(c *gin.Context, storyID uint) bool {
+	uid, _ := c.Get("user_id")
+	userID, ok := uid.(uint)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return false
+	}
+	story, err := sc.StoryService.GetStory(storyID)
+	// Report someone else's story as missing so IDs can't be probed.
+	if err != nil || story.UserID != userID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Story not found"})
+		return false
+	}
+	if story.Status != "in_progress" {
+		c.JSON(http.StatusConflict, gin.H{"error": "This story is already finished"})
+		return false
+	}
+	return true
 }

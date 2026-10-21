@@ -1,6 +1,5 @@
 // Package speech provides in-process speech-to-text (Whisper) and
-// text-to-speech (Piper/VITS) using sherpa-onnx, replacing the former
-// Python STT/TTS sidecar service.
+// text-to-speech (Piper/VITS) using sherpa-onnx
 package speech
 
 import (

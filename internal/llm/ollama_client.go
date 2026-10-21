@@ -16,14 +16,16 @@ import (
 
 type OllamaClient struct {
 	ollamaURL string
+	model     string
 	client    *http.Client
 }
 
-func NewOllamaClient(url string) *OllamaClient {
+func NewOllamaClient(url, model string) *OllamaClient {
 	return &OllamaClient{
 		ollamaURL: url,
+		model:     model,
 		client: &http.Client{
-			Timeout: 600 * time.Second, // Set a timeout to avoid hanging requests
+			Timeout: 600 * time.Second,
 		},
 	}
 }
@@ -43,7 +45,7 @@ type StreamCallback func(response string, done bool) error
 // StreamChat sends a prompt to Ollama and streams the response via callback
 func (o *OllamaClient) StreamChat(ctx context.Context, prompt string, callback StreamCallback) error {
 	requestBody, err := json.Marshal(map[string]interface{}{
-		"model":  "mistral",
+		"model":  o.model,
 		"prompt": prompt,
 		"stream": true, // Enable streaming
 	})
@@ -127,7 +129,7 @@ type ChatMessage struct {
 
 func (o *OllamaClient) callOllama(prompt string) (string, error) {
 	requestBody, _ := json.Marshal(map[string]interface{}{
-		"model":  "mistral",
+		"model":  o.model,
 		"prompt": prompt,
 	})
 
@@ -155,7 +157,6 @@ func (o *OllamaClient) callOllama(prompt string) (string, error) {
 	}
 
 	fullBody := string(bodyBytes)
-	// Log the full response for debugging
 	//log.Println("Full LLM response body:", fullBody)
 
 	// If the response is streamed as multiple JSON objects (separated by newlines),
@@ -211,31 +212,116 @@ func (o *OllamaClient) GenerateQuestions(topic string, limit int) ([]string, err
 	return parseQuestions(response), nil
 }
 
-func (o *OllamaClient) EvaluateAnswer(question, userAnswer, correctAnswer string) (bool, string, error) {
-	// Instruct the model to output a minimal JSON response
-	prompt := fmt.Sprintf(
-		"Question: %s\nUser Answer: %s\nCorrect Answer: %s\n"+
-			"Evaluate the answer. Output minimal JSON with keys 'correct' (boolean) and 'feedback' (string).",
-		question, userAnswer, correctAnswer,
-	)
+// judgeSchema constrains JudgeCorrection's output (Ollama structured outputs).
+// Fields are generated in order, so the model checks each rule before it
+// commits to a verdict; asked for the verdict first it decides, then rationalises.
+var judgeSchema = orderedSchema{
+	{"fixes_mistake", map[string]interface{}{"type": "boolean"}},
+	{"same_meaning_and_tense", map[string]interface{}{"type": "boolean"}},
+	{"grammatical", map[string]interface{}{"type": "boolean"}},
+	{"explanation", map[string]interface{}{"type": "string"}},
+}
 
-	response, err := o.callOllama(prompt)
-	if err != nil {
+type schemaField struct {
+	name string
+	def  map[string]interface{}
+}
+
+// orderedSchema marshals as a JSON object schema whose properties keep their
+// declared order (Go maps would sort them alphabetically).
+type orderedSchema []schemaField
+
+func (o orderedSchema) MarshalJSON() ([]byte, error) {
+	var props bytes.Buffer
+	required := make([]string, len(o))
+	props.WriteByte('{')
+	for i, f := range o {
+		if i > 0 {
+			props.WriteByte(',')
+		}
+		name, _ := json.Marshal(f.name)
+		def, err := json.Marshal(f.def)
+		if err != nil {
+			return nil, err
+		}
+		props.Write(name)
+		props.WriteByte(':')
+		props.Write(def)
+		required[i] = f.name
+	}
+	props.WriteByte('}')
+	req, _ := json.Marshal(required)
+	return []byte(fmt.Sprintf(`{"type":"object","properties":%s,"required":%s}`, props.String(), req)), nil
+}
+
+// JudgeCorrection decides whether a student's correction of a sentence is an
+// acceptable alternative to the expected answer. It implements grading.Judge
+// and is only called for answers already close to the expected one.
+func (o *OllamaClient) JudgeCorrection(original, expected, answer string) (bool, string, error) {
+	prompt := fmt.Sprintf(`You are a strict but kind English teacher grading a child's grammar exercise.
+
+The child was asked to fix the mistake in this sentence:
+ORIGINAL: %s
+A correct answer is:
+EXPECTED: %s
+The child wrote:
+ANSWER: %s
+
+Compare the ANSWER with the ORIGINAL and the EXPECTED answer word by word, then decide:
+- "fixes_mistake": does the ANSWER correct the mistake that the EXPECTED answer corrects? If the mistaken word from the ORIGINAL is still there, this is false.
+- "same_meaning_and_tense": same people, actions and verb tense as the EXPECTED answer? A different tense (e.g. "barked" instead of "barks") is false.
+- "grammatical": is it a complete, grammatically correct sentence with correct capitals and punctuation?
+Different wording is fine when all three are true. If you are unsure, answer false.
+
+"explanation": one short, friendly sentence to the child that matches your decisions.`, original, expected, answer)
+
+	var result struct {
+		FixesMistake bool   `json:"fixes_mistake"`
+		SameMeaning  bool   `json:"same_meaning_and_tense"`
+		Grammatical  bool   `json:"grammatical"`
+		Explanation  string `json:"explanation"`
+	}
+	if err := o.generateJSON(prompt, judgeSchema, &result); err != nil {
 		return false, "", err
 	}
+	// Accept only if every rule passes.
+	ok := result.FixesMistake && result.SameMeaning && result.Grammatical
+	return ok, strings.TrimSpace(result.Explanation), nil
+}
 
-	// Expected JSON response structure:
-	// {"correct": true, "feedback": "Short feedback message"}
-	var result struct {
-		Correct  bool   `json:"correct"`
-		Feedback string `json:"feedback"`
+// generateJSON runs a single non-streaming, deterministic generation whose
+// output is constrained to schema, and decodes it into out.
+func (o *OllamaClient) generateJSON(prompt string, schema interface{}, out interface{}) error {
+	requestBody, err := json.Marshal(map[string]interface{}{
+		"model":   o.model,
+		"prompt":  prompt,
+		"stream":  false,
+		"format":  schema,
+		"options": map[string]interface{}{"temperature": 0},
+	})
+	if err != nil {
+		return err
+	}
+	resp, err := o.client.Post(o.ollamaURL, "application/json", bytes.NewReader(requestBody))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("ollama returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		return false, "", fmt.Errorf("failed to parse JSON response: %w", err)
+	var envelope struct {
+		Response string `json:"response"`
 	}
-
-	return result.Correct, result.Feedback, nil
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return fmt.Errorf("failed to decode Ollama response: %w", err)
+	}
+	if err := json.Unmarshal([]byte(envelope.Response), out); err != nil {
+		return fmt.Errorf("failed to parse model JSON %q: %w", envelope.Response, err)
+	}
+	return nil
 }
 
 func parseQuestions(response string) []string {
@@ -249,30 +335,55 @@ func parseQuestions(response string) []string {
 	return questions
 }
 
-func (o *OllamaClient) CorrectSentence(sentence string) (string, string, error) {
-	prompt := "Please correct the following sentence if needed and provide feedback in the format 'Corrected: <corrected sentence> Feedback: <feedback message>': " + sentence
-	response, err := o.callOllama(prompt)
-	if err != nil {
-		log.Println("Error calling Ollama:", err)
-		return sentence, "Could not generate feedback", err
+// SentenceReview is the LLM's review of one story sentence.
+type SentenceReview struct {
+	Corrected string `json:"corrected"`
+	Feedback  string `json:"feedback"`
+	// Scene is a short, concrete visual description for the illustrator,
+	// resolving ambiguity from the story context.
+	Scene string `json:"scene"`
+}
+
+var sentenceReviewSchema = map[string]interface{}{
+	"type": "object",
+	"properties": map[string]interface{}{
+		"corrected": map[string]interface{}{"type": "string"},
+		"feedback":  map[string]interface{}{"type": "string"},
+		"scene":     map[string]interface{}{"type": "string"},
+	},
+	"required": []string{"corrected", "feedback", "scene"},
+}
+
+// ReviewSentence corrects a child's story sentence, explains the correction,
+// and describes the scene for illustration. title and previous (earlier
+// corrected sentences) give the context needed to keep pictures consistent.
+func (o *OllamaClient) ReviewSentence(title string, previous []string, sentence string) (*SentenceReview, error) {
+	context := "(this is the first sentence)"
+	if len(previous) > 0 {
+		context = strings.Join(previous, " ")
 	}
-	//log.Println("LLM response:", response)
-	// Parse response expecting: "Corrected: <corrected sentence> Feedback: <feedback message>"
-	parts := strings.Split(response, "Feedback:")
-	var correctedText, feedback string
-	if len(parts) >= 2 {
-		correctedPart := strings.TrimSpace(parts[0])
-		if strings.HasPrefix(correctedPart, "Corrected:") {
-			correctedText = strings.TrimSpace(strings.TrimPrefix(correctedPart, "Corrected:"))
-		} else {
-			correctedText = sentence
-		}
-		feedback = strings.TrimSpace(parts[1])
-	} else {
-		correctedText = sentence
-		feedback = "No feedback provided"
+	prompt := fmt.Sprintf(`You are helping a child (aged 7-12) write a story, one sentence at a time.
+
+Story title: %s
+Story so far: %s
+New sentence: %s
+
+Return:
+- "corrected": the new sentence with spelling, grammar and punctuation fixed. Change as little as possible and keep the child's words and meaning. If it is already correct, return it unchanged.
+- "feedback": one short, encouraging sentence to the child. If you changed something, name the rule simply (e.g. "Use 'went' for the past tense of 'go'."); otherwise praise something specific.
+- "scene": a concrete visual description of what the new sentence shows, for an image generator, at most 25 words. Words with two meanings confuse the image generator, so always name the object type: "a red diamond-shaped toy kite" (never just "red kite", which is also a bird), "a wooden baseball bat", "a computer mouse". Describe recurring characters the same way each time.`, title, context, sentence)
+
+	var review SentenceReview
+	if err := o.generateJSON(prompt, sentenceReviewSchema, &review); err != nil {
+		return nil, err
 	}
-	return correctedText, feedback, nil
+	review.Corrected = strings.TrimSpace(review.Corrected)
+	review.Feedback = strings.TrimSpace(review.Feedback)
+	review.Scene = strings.TrimSpace(review.Scene)
+	if review.Corrected == "" {
+		return nil, errors.New("model returned an empty correction")
+	}
+	return &review, nil
 }
 
 type AnalysisResponse struct {
@@ -281,16 +392,21 @@ type AnalysisResponse struct {
 	PerformanceScore int      `json:"performance_score"`
 }
 
-// AnalyzeText sends the prompt to Ollama and attempts to parse the response as JSON.
-func (o *OllamaClient) AnalyzeText(prompt string) (*AnalysisResponse, error) {
-	response, err := o.callOllama(prompt)
-	if err != nil {
-		return nil, err
-	}
+var analysisSchema = map[string]interface{}{
+	"type": "object",
+	"properties": map[string]interface{}{
+		"analysis":          map[string]interface{}{"type": "string"},
+		"tips":              map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+		"performance_score": map[string]interface{}{"type": "integer"},
+	},
+	"required": []string{"analysis", "tips", "performance_score"},
+}
 
+// AnalyzeText runs prompt with output constrained to the AnalysisResponse schema.
+func (o *OllamaClient) AnalyzeText(prompt string) (*AnalysisResponse, error) {
 	var analysisResp AnalysisResponse
-	if err := json.Unmarshal([]byte(response), &analysisResp); err != nil {
-		return nil, fmt.Errorf("failed to parse analysis response: %w", err)
+	if err := o.generateJSON(prompt, analysisSchema, &analysisResp); err != nil {
+		return nil, fmt.Errorf("failed to analyse text: %w", err)
 	}
 	return &analysisResp, nil
 }

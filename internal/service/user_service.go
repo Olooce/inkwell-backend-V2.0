@@ -6,7 +6,7 @@ import (
 )
 
 type UserService interface {
-	GetAllUsers() ([]model.User, error)
+	GetUser(id uint) (*model.User, error)
 }
 
 type userService struct {
@@ -17,6 +17,12 @@ func NewUserService(userRepo repository.UserRepository) UserService {
 	return &userService{userRepo: userRepo}
 }
 
-func (s *userService) GetAllUsers() ([]model.User, error) {
-	return s.userRepo.GetAllUsers()
+// GetUser returns a user's profile
+func (s *userService) GetUser(id uint) (*model.User, error) {
+	user, err := s.userRepo.GetUserByID(id)
+	if err != nil {
+		return nil, err
+	}
+	user.Password = ""
+	return user, nil
 }

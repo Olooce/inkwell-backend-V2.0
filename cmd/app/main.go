@@ -22,6 +22,7 @@ import (
 	"inkwell-backend-V2.0/internal/config"
 	"inkwell-backend-V2.0/internal/controller"
 	"inkwell-backend-V2.0/internal/db"
+	"inkwell-backend-V2.0/internal/imagegen"
 	"inkwell-backend-V2.0/internal/llm"
 	"inkwell-backend-V2.0/internal/model"
 	"inkwell-backend-V2.0/internal/repository"
@@ -37,16 +38,15 @@ import (
 )
 
 var (
-	ollamaCmd       *exec.Cmd // Ollama process, only set if this app started it
-	diffusionClient *llm.StableDiffusionWrapper
-	ollamaClient    *llm.OllamaClient
-	speechEngine    *speech.Engine
-	wg              = &sync.WaitGroup{}
-	cleanupOnce     sync.Once
+	ollamaCmd      *exec.Cmd // Ollama process
+	imageGenerator imagegen.Generator
+	ollamaClient   *llm.OllamaClient
+	speechEngine   *speech.Engine
+	wg             = &sync.WaitGroup{}
+	cleanupOnce    sync.Once
 )
 
 func main() {
-	// Make sure child processes don't outlive a panic in main.
 	defer func() {
 		if r := recover(); r != nil {
 			cleanup()
@@ -87,7 +87,6 @@ func main() {
 	runMigrations()
 	seedQuestions()
 
-	// Create repositories and register event listeners.
 	userRepo, assessmentRepo, storyRepo := createRepositories()
 	registerEventListeners(storyRepo)
 
@@ -130,7 +129,6 @@ func initAuth(cfg *config.APIConfig) {
 }
 
 func initThirdPartyClients(cfg *config.APIConfig) {
-	// Load in-process STT/TTS models. Missing models only disable the speech endpoints.
 	engine, err := speech.NewEngine(speech.Config{ModelDir: cfg.ThirdParty.SpeechModelDir})
 	if err != nil {
 		Log.Warn("Speech engine unavailable, STT/TTS endpoints will return 503: %v", err)
@@ -138,8 +136,24 @@ func initThirdPartyClients(cfg *config.APIConfig) {
 		speechEngine = engine
 	}
 
-	// Initialize Stable Diffusion wrapper.
-	diffusionClient = &llm.StableDiffusionWrapper{AccessToken: cfg.ThirdParty.HFToken}
+	images := cfg.Images
+	generator, err := imagegen.New(imagegen.Config{
+		Provider: images.Provider,
+		Fallback: images.Fallback,
+		Local:    imagegen.LocalConfig{Binary: images.SDBinary, Model: images.SDModel, Steps: images.Steps},
+		HuggingFace: imagegen.HuggingFaceConfig{
+			Token: cfg.ThirdParty.HFToken, Model: images.HFModel, Provider: images.HFProvider,
+		},
+	})
+	if err != nil {
+		Log.Warn("Image generation: %v", err)
+	}
+	if generator != nil {
+		imageGenerator = generator
+		Log.Info("Image generation using: %s", generator.Name())
+	} else {
+		Log.Warn("No image generator available; stories will have no pictures.")
+	}
 
 	// Determine Ollama host.
 	ollamaHost := cfg.ThirdParty.OllamaHost
@@ -152,7 +166,7 @@ func initThirdPartyClients(cfg *config.APIConfig) {
 		ollamaModel = "mistral"
 	}
 
-	// Start Ollama if installed and not already running (e.g. as a system service).
+	// Start Ollama if installed and not already running
 	if isOllamaInstalled() {
 		if isOllamaRunning() {
 			Log.Info("Ollama is already running; using the existing instance.")
@@ -164,7 +178,7 @@ func initThirdPartyClients(cfg *config.APIConfig) {
 		Log.Warn("Ollama not found locally. Using configured remote Ollama host: %s", ollamaHost)
 	}
 	// Initialize Ollama Client.
-	ollamaClient = llm.NewOllamaClient(ollamaHost + "/api/generate")
+	ollamaClient = llm.NewOllamaClient(ollamaHost+"/api/generate", ollamaModel)
 	// Preload model if using local Ollama.
 	if isOllamaInstalled() {
 		preloadModel(ollamaModel)
@@ -222,7 +236,7 @@ func createServices(userRepo repository.UserRepository, assessmentRepo repositor
 	authService := service.NewAuthService(userRepo)
 	userService := service.NewUserService(userRepo)
 	assessmentService := service.NewAssessmentService(assessmentRepo, ollamaClient)
-	storyService := service.NewStoryService(storyRepo, ollamaClient, diffusionClient)
+	storyService := service.NewStoryService(storyRepo, ollamaClient, imageGenerator)
 	return authService, userService, assessmentService, storyService
 }
 
@@ -232,7 +246,7 @@ func initRouter(cfg *config.APIConfig) *gin.Engine {
 	if err := router.SetTrustedProxies(cfg.Context.TrustedProxies.Proxies); err != nil {
 		Log.Error("Failed to set trusted proxies: %v", err)
 	}
-	// Register global middleware.
+	// Register middleware.
 	middlewares := []gin.HandlerFunc{
 		middleware.CORSMiddleware(),
 		middleware.AuthMiddleware(),
@@ -304,8 +318,7 @@ func runServer(cfg *config.APIConfig, router *gin.Engine) {
 	os.Exit(0)
 }
 
-// cleanup stops child processes and releases native resources. It is safe to
-// call more than once and from any exit path.
+// cleanup stops child processes and releases native resources.
 func cleanup() {
 	cleanupOnce.Do(func() {
 		stopOllama()
@@ -315,8 +328,6 @@ func cleanup() {
 	})
 }
 
-// exitWithCleanup must be used instead of os.Exit once child processes may be
-// running, because os.Exit skips deferred calls.
 func exitWithCleanup(code int) {
 	cleanup()
 	os.Exit(code)
@@ -356,8 +367,7 @@ func printStartUpBanner() {
 
 // Start Ollama if not already running
 func startOllama() {
-	// Run "ollama serve" directly on every OS. Going through "cmd /C start" on
-	// Windows detached the server, so it could never be stopped.
+	// Run "ollama serve" directly on every OS.
 	cmd := exec.Command("ollama", "serve")
 	configureChildProcess(cmd)
 
@@ -464,8 +474,7 @@ func preloadModel(modelName string) {
 	}
 }
 
-// stopOllama stops the Ollama server if this application started it. An
-// Ollama instance that was already running (e.g. a system service) is left alone.
+// stopOllama stops the Ollama server if this application started it.
 func stopOllama() {
 	stopChildProcess("Ollama", ollamaCmd)
 	ollamaCmd = nil
