@@ -34,5 +34,9 @@ if [ ! -f "$MODEL" ]; then
   rm -f "$MODEL_DIR/sd_turbo.safetensors" "$MODEL_DIR/sd_turbo-f16.gguf"
 fi
 
+if [ ! -f "$MODEL_DIR/LICENSE.md" ]; then
+  curl -fsSL -o "$MODEL_DIR/LICENSE.md" "https://huggingface.co/stabilityai/sd-turbo/resolve/main/LICENSE.md"
+fi
+
 "$SD_DIR/sd-cli" --list-devices 2>/dev/null | grep -v '^load_backend\|^ggml_' || true
 echo "Image generation ready: $MODEL"

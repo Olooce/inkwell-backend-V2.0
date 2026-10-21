@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -54,6 +55,7 @@ func main() {
 		}
 	}()
 
+	chdirToAppDir()
 	printStartUpBanner()
 
 	cfg := loadConfig("config.xml")
@@ -110,6 +112,29 @@ func main() {
 // CONFIGURATION & INITIALIZATION FUNCTIONS
 //
 
+// chdirToAppDir makes a release bundle work from any working directory: if
+// config.xml isn't in the current directory but sits next to the executable,
+// switch to the executable's directory so models/, tools/, working/ and logs/
+// resolve inside the bundle.
+func chdirToAppDir() {
+	if _, err := os.Stat("config.xml"); err == nil {
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if exe, err = filepath.EvalSymlinks(exe); err != nil {
+		return
+	}
+	dir := filepath.Dir(exe)
+	if _, err := os.Stat(filepath.Join(dir, "config.xml")); err == nil {
+		if err := os.Chdir(dir); err != nil {
+			log.Printf("could not switch to app directory %s: %v", dir, err)
+		}
+	}
+}
+
 func loadConfig(path string) *config.APIConfig {
 	cfg, err := config.LoadConfig(path)
 	if err != nil {
@@ -134,6 +159,9 @@ func initThirdPartyClients(cfg *config.APIConfig) {
 		Log.Warn("Speech engine unavailable, STT/TTS endpoints will return 503: %v", err)
 	} else {
 		speechEngine = engine
+		if _, err := exec.LookPath("ffmpeg"); err != nil {
+			Log.Warn("ffmpeg not found on PATH; speech-to-text requests will fail until it is installed.")
+		}
 	}
 
 	images := cfg.Images
